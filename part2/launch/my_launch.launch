@@ -1,0 +1,17 @@
+<launch>
+
+    <arg name="world_name"      default="awesome"/>
+
+
+    <node pkg="part2" type="navgoal" name="navgoal_listener">
+    </node>
+
+    <node pkg="part2" type="navgoal3" name="navgoal_publisher">
+    </node>
+
+
+    <node pkg="part2" type="displaymapmarkers" name="mapmarkers">
+      <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
+    </node>
+
+</launch>
