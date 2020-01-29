@@ -1,7 +1,11 @@
 <launch>
 	
 	<include file="$(find dd2419_simulation)/launch/simulation.launch"/>
-
+  <include file="$(find dd2419_simulation)/launch/aruco.launch"/>
+    <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_cam_trans" args="0.01 0 0.02 -1.57 0 -1.57 cf1/base_link cf1/camera">
+    </node> 
+    <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom_trans" args="0 0 0 0 0 0 map cf1/odom">
+    </node> 
     
     <arg name="world_name"      default="awesome"/>
 
