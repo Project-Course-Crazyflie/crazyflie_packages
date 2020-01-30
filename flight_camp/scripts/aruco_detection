@@ -4,6 +4,7 @@ import math
 import numpy as np
 import rospy
 import tf2_ros
+import tf2_msgs
 import tf2_geometry_msgs
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from geometry_msgs.msg import PoseStamped
@@ -24,14 +25,17 @@ pub_cmd = None
 
 def transform_from_marker(m):
     t = TransformStamped()
-    #t.header.stamp = rospy.Time(0)
-    t.header.frame_id = 'map'
+    t.header.stamp = rospy.Time.now()
+    t.header.frame_id = 'camera_link'
     t.child_frame_id = 'aruco/detected' + str(m.id)
     t.transform.translation = Vector3(*[m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z])
     roll, pitch, yaw = m.pose.pose.orientation.x, m.pose.pose.orientation.y, m.pose.pose.orientation.z
     (t.transform.rotation.x,
      t.transform.rotation.y,
      t.transform.rotation.z,
+    # t.transform.rotation.w) = quaternion_from_euler(math.radians(yaw),
+    #                                                 math.radians(pitch),
+    #                                                 math.radians(roll))
      t.transform.rotation.w) = quaternion_from_euler(math.radians(roll),
                                                      math.radians(pitch),
                                                      math.radians(yaw))
@@ -44,17 +48,25 @@ def detect_callback(msg):
    
 
 def publish_cmd(goal):
+    br = tf2_ros.TransformBroadcaster()
     # Need to tell TF that the goal was just generated
     rospy.loginfo("Transforming from %s to map" % goal.header.frame_id)
-    goal.header.stamp = rospy.Time(0)
+    #goal.header.stamp = rospy.Time.now()
     #if not tf_buf.can_transform(goal.header.frame_id, "map", goal.header.stamp):
     #    rospy.logwarn_throttle(5.0, 'No transform from %s to map' % goal.header.frame_id)
     #    return
-
+    #rospy.loginfo(int(rospy.Time.now().to_nsec()))
+    #rospy.loginfo(int(goal.header.stamp.to_nsec()))
+    #rospy.loginfo(goal.markers[0].header.stamp)
+    time_diff = abs(int(goal.header.stamp.to_nsec()) - int(rospy.Time.now().to_nsec()))
+    
+    if time_diff > 100000000:
+        rospy.loginfo("Last detection to old: " + str(time_diff))
+        return
     rospy.loginfo("Transforming " + str(len(goal.markers)) + " markers")
     
     transforms = []
-
+    
     for m in goal.markers:
         rospy.loginfo("ID: " + str(m.id))
         trans_m = transform_from_marker(m)
@@ -63,9 +75,12 @@ def publish_cmd(goal):
         
 
     br.sendTransform(transforms)
+        #rospy.loginfo(br.sendTransform.__doc__)
 
 #pub_cmd  = rospy.Publisher('/tf', VMarkerArray, queue_size=2)
-br = tf2_ros.TransformBroadcaster()
+#pub_tf = rospy.Publisher("/tf", tf2_msgs.msg.TFMessage, queue_size=1)
+#br = tf2_ros.TransformBroadcaster()
+
 rospy.init_node('aruco_detection')
 #tf_buf   = tf2_ros.Buffer()
 #tf_lstn  = tf2_ros.TransformListener(tf_buf)
