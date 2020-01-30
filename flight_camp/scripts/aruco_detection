@@ -5,9 +5,10 @@ import numpy as np
 import rospy
 import tf2_ros
 import tf2_geometry_msgs
-from tf.transformations import euler_from_quaternion
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseArray
+from geometry_msgs.msg import TransformStamped, Vector3
 from crazyflie_driver.msg import Position
 
 import json
@@ -21,6 +22,21 @@ from aruco_msgs.msg import Marker
 goal = None
 pub_cmd = None
 
+def transform_from_marker(m):
+    t = TransformStamped()
+    #t.header.stamp = rospy.Time(0)
+    t.header.frame_id = 'map'
+    t.child_frame_id = 'aruco/detected' + str(m.id)
+    t.transform.translation = Vector3(*[m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z])
+    roll, pitch, yaw = m.pose.pose.orientation.x, m.pose.pose.orientation.y, m.pose.pose.orientation.z
+    (t.transform.rotation.x,
+     t.transform.rotation.y,
+     t.transform.rotation.z,
+     t.transform.rotation.w) = quaternion_from_euler(math.radians(roll),
+                                                     math.radians(pitch),
+                                                     math.radians(yaw))
+    return t
+
 def detect_callback(msg):
     global goal
     #rospy.loginfo("New marker detected " + str(len(msg.markers)))
@@ -31,75 +47,29 @@ def publish_cmd(goal):
     # Need to tell TF that the goal was just generated
     rospy.loginfo("Transforming from %s to map" % goal.header.frame_id)
     goal.header.stamp = rospy.Time(0)
-    if not tf_buf.can_transform(goal.header.frame_id, "map", goal.header.stamp):
-        rospy.logwarn_throttle(5.0, 'No transform from %s to map' % goal.header.frame_id)
-        return
+    #if not tf_buf.can_transform(goal.header.frame_id, "map", goal.header.stamp):
+    #    rospy.logwarn_throttle(5.0, 'No transform from %s to map' % goal.header.frame_id)
+    #    return
 
-    trans_markers = VMarkerArray()
     rospy.loginfo("Transforming " + str(len(goal.markers)) + " markers")
     
+    transforms = []
+
     for m in goal.markers:
         rospy.loginfo("ID: " + str(m.id))
-        p = PoseStamped()
-        p.header = m.header
-        p.pose = m.pose.pose
-        p.header.stamp = rospy.Time(0)
+        trans_m = transform_from_marker(m)
+        transforms.append(trans_m)
 
-        map_p = tf_buf.transform(p, 'map')
-
-        true_p = PoseStamped()
-        true_p.header.frame_id = "aruco/marker" + str(m.id)
-        true_p = tf_buf.transform(true_p, "map")
-
-        mp = np.array([map_p.pose.position.x, map_p.pose.position.y, map_p.pose.position.z])
-        tp = np.array([true_p.pose.position.x, true_p.pose.position.y, true_p.pose.position.z])
-        err = np.linalg.norm(tp-mp)
         
-        rospy.loginfo("Marker " + str(m.id) + " err: " + str(err))
-        
-        vmarker = VMarker()
-        vmarker.type = VMarker.TEXT_VIEW_FACING
-        vmarker.header.frame_id = "map"
-        vmarker.pose = map_p.pose
-        
-        if err > 0.3:
-            vmarker.type = VMarker.ARROW
-            vmarker.id = 0
-            vmarker.text = "unknown object"
-            vmarker.color.r = 1
-            vmarker.color.g = 0
-            vmarker.color.b = 0
-            vmarker.scale.x = 0.4
-            vmarker.scale.y = 0.05
-            vmarker.scale.z = 0.05
-        else:
-            vmarker.type = VMarker.TEXT_VIEW_FACING
-            vmarker.id = m.id
-            vmarker.text = "marker" + str(vmarker.id)
-            vmarker.scale.x = 0.2
-            vmarker.scale.y = 0.2
-            vmarker.scale.z = 0.2
-            vmarker.color.r = 0
-            vmarker.color.g = 1
-            vmarker.color.b = 0
-        vmarker.color.a = 1
-        
-        
-        #vm2 = vmarker
-        #vm2.type = VMarker.ARROW
-        #vm2.scale.x = 0.4
-        #vm2.scale.y = 0.05
-        #vm2.scale.z = 0.05
 
-        trans_markers.markers.append(vmarker)
+    br.sendTransform(transforms)
 
-    pub_cmd.publish(trans_markers)
-
-pub_cmd  = rospy.Publisher('/aruco/detected_markers', VMarkerArray, queue_size=2)
+#pub_cmd  = rospy.Publisher('/tf', VMarkerArray, queue_size=2)
+br = tf2_ros.TransformBroadcaster()
 rospy.init_node('aruco_detection')
-tf_buf   = tf2_ros.Buffer()
-tf_lstn  = tf2_ros.TransformListener(tf_buf)
-rospy.loginfo(dir(tf_buf))
+#tf_buf   = tf2_ros.Buffer()
+#tf_lstn  = tf2_ros.TransformListener(tf_buf)
+#rospy.loginfo(dir(tf_buf))
 
 
 def main():
