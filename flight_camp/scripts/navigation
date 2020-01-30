@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+
+import math
+import numpy as np
+import rospy
+import tf2_ros
+import tf2_geometry_msgs
+from tf.transformations import euler_from_quaternion
+from geometry_msgs.msg import PoseStamped
+from crazyflie_driver.msg import Position
+
+class Navigator:
+    def __init__(self, goals):
+        self.goals = goals
+        self.goal_top = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=2)
+        self.cf1_pos_top = rospy.Subscriber('/cf1/pose', PoseStamped, self.cf1_pose_callback)
+        #self.goal_idx_top = rospy.Subscriber('/navigation_goal_idx', PoseStamped, self.goal_idx_callback)
+        #self.goal_idx_from_top = -1
+        #self.pause = 0
+        self.cf1_pose = None
+        self.goal_idx = 0
+
+    def spin(self):
+        
+        rate = rospy.Rate(10)  # Hz
+        while not rospy.is_shutdown():
+            try:
+                goal = self.goals[self.goal_idx]
+                
+            except IndexError:
+                self.running = False
+                rospy.loginfo("No more waypoint goals")
+                return
+        
+            if self.cf1_pose:
+                g = self.goals[self.goal_idx]
+                if g.pose.position.z == 0:
+                    g.pose.position.z = 0.4
+                g = np.array([g.pose.position.x, g.pose.position.y, g.pose.position.z])
+                curr = np.array([self.cf1_pose.pose.position.x, self.cf1_pose.pose.position.y, self.cf1_pose.pose.position.z])
+                
+                err = np.linalg.norm(g-curr)
+                at_waypoint = err < 0.2
+                rospy.loginfo("At goal?: " + str(at_waypoint))
+                if at_waypoint:
+                    self.goal_idx += 1
+                self.goal_top.publish(goal)
+            else:
+                rospy.loginfo("Waiting for cf1 pose...")
+            rate.sleep()
+
+
+    def cf1_pose_callback(self, msg):
+        self.cf1_pose = msg
+
+    #def goal_idx_callback(self, msg):
+    #    self.goal_idx_from_top = msg.pose.position.x
+
+def main():
+    rospy.init_node('navigation')
+    poses = [(0, 0, 0),
+            (5, 0, 0),
+            (5.2, 0.5, 0),
+            (5, 0.5, 0),
+            (4.8, 0.5, 0),
+            (4.8, 0, 0),
+            (5, 0, 0),
+            (5.2, 0, 0),
+            (5.2, -1, 0),
+            (-5, -1, 0)]
+
+
+    goals = [PoseStamped() for _ in poses]
+    for i, p in enumerate(goals):
+        p.header.frame_id = "map"
+        p.pose.position.x, p.pose.position.y, p.pose.position.z = poses[i]
+
+    #rospy.loginfo(goals)
+    n = Navigator(goals)
+    n.spin()
+
+if __name__ == '__main__':
+    main()

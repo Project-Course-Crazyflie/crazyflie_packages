@@ -39,7 +39,6 @@ def main(argv=sys.argv):
     transforms = [transform_from_marker(m) for m in world['markers']]
 
     # Publish these transforms statically forever
-
     broadcaster = tf2_ros.StaticTransformBroadcaster()
     broadcaster.sendTransform(transforms)
     rospy.spin()
