@@ -5,6 +5,7 @@ import roslib
 import sys
 import rospy
 import cv2
+import imutils
 import numpy as np
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
@@ -22,6 +23,7 @@ class image_converter:
     # Convert the image from ROS to OpenCV format?
     try:
       cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+      gray = self.bridge.imgmsg_to_cv2(data, "mono8")
     except CvBridgeError as e:
       print(e)
 
@@ -29,24 +31,38 @@ class image_converter:
     hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
     # define range of the color we look for in the HSV space
-    #lower = np.array([0,0,250])
-    #upper = np.array([255,5,255])
-
-    red = np.uint8([[[255,0,0]]])
-    hsv_r = cv2.cvtColor(red, cv2.COLOR_BGR2HSV)
-
-    lower = np.array([76-10, 255, 255])
-    upper = np.array([76+10, 255, 255])
+    lower = np.array([5, 50, 50])
+    upper = np.array([15, 255, 255])
 
     # Threshold the HSV image to get only the pixels in ranage
     mask = cv2.inRange(hsv, lower, upper)
 
     # Bitwise-AND mask and original image
-    res = cv2.bitwise_and(cv_image, cv_image, mask= mask)
+    res = cv2.bitwise_and(gray, gray, mask= mask)
+
+    blur = cv2.GaussianBlur(res,(5,5),0)
+    ret3,th3 = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    res = th3
+    im2,contours,hierarchy = cv2.findContours(res, 1, 2)
+    #cnts = imutils.grab_contours(contours)
+    
+    #cv2.drawContours(cv_image, contours, -1, (255,0,0), 3)
+    for c in contours:
+      M = cv2.moments(c, binaryImage=True)
+      try:
+        cx = int(M['m10']/M['m00'])
+        cy = int(M['m01']/M['m00'])
+      except ZeroDivisionError:
+        pass
+      else:
+        cv2.circle(cv_image, (cx,cy), 50, 255)
+      #rospy.loginfo(str(cx) + ", " + str(cy))
+    #rospy.loginfo(contours)
+    #res = im2
 
     # Publish the image
     try:
-      self.image_pub.publish(self.bridge.cv2_to_imgmsg(res, "bgr8"))
+      self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
     except CvBridgeError as e:
       print(e)
 
