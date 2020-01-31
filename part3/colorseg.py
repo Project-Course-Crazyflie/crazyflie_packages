@@ -39,13 +39,21 @@ class image_converter:
 
     # Bitwise-AND mask and original image
     res = cv2.bitwise_and(gray, gray, mask= mask)
-
-    blur = cv2.GaussianBlur(res,(5,5),0)
-    ret3,th3 = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    res = th3
-    im2,contours,hierarchy = cv2.findContours(res, 1, 2)
-    #cnts = imutils.grab_contours(contours)
     
+    # Copy the thresholded image.
+    im_floodfill = res.copy()
+    # Mask used to flood filling.
+    # Notice the size needs to be 2 pixels than the image.
+    h, w = res.shape[:2]
+    mask = np.zeros((h+2, w+2), np.uint8)
+    # Floodfill from point (0, 0)
+    cv2.floodFill(im_floodfill, mask, (0,0), 255);
+    # Invert floodfilled image
+    im_floodfill_inv = cv2.bitwise_not(im_floodfill)
+    # Combine the two images to get the foreground.
+    res = res | im_floodfill_inv
+
+    im2,contours,hierarchy = cv2.findContours(res, 1, 2)
     #cv2.drawContours(cv_image, contours, -1, (255,0,0), 3)
     for c in contours:
       M = cv2.moments(c, binaryImage=True)
@@ -56,13 +64,11 @@ class image_converter:
         pass
       else:
         cv2.circle(cv_image, (cx,cy), 50, 255)
-      #rospy.loginfo(str(cx) + ", " + str(cy))
-    #rospy.loginfo(contours)
-    #res = im2
 
     # Publish the image
     try:
       self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
+      #self.image_pub.publish(self.bridge.cv2_to_imgmsg(res, "mono8"))
     except CvBridgeError as e:
       print(e)
 
