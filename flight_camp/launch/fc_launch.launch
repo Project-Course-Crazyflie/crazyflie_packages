@@ -20,7 +20,7 @@
       <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
     </node>
 
-    <!--<node pkg="flight_camp" type="aruco_detection" name="aruco_detection"> 
-    </node>-->
+    <node pkg="flight_camp" type="aruco_detection" name="aruco_detection"> 
+    </node>
 
 </launch>

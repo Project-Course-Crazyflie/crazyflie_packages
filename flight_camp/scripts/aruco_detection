@@ -29,21 +29,11 @@ def transform_from_marker(m):
     t.header.frame_id = 'camera_link'
     t.child_frame_id = 'aruco/detected' + str(m.id)
     t.transform.translation = Vector3(*[m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z])
-    roll, pitch, yaw = m.pose.pose.orientation.x, m.pose.pose.orientation.y, m.pose.pose.orientation.z
-    (t.transform.rotation.x,
-     t.transform.rotation.y,
-     t.transform.rotation.z,
-    # t.transform.rotation.w) = quaternion_from_euler(math.radians(yaw),
-    #                                                 math.radians(pitch),
-    #                                                 math.radians(roll))
-     t.transform.rotation.w) = quaternion_from_euler(math.radians(roll),
-                                                     math.radians(pitch),
-                                                     math.radians(yaw))
+    t.transform.rotation = m.pose.pose.orientation
     return t
 
 def detect_callback(msg):
     global goal
-    #rospy.loginfo("New marker detected " + str(len(msg.markers)))
     goal = msg
    
 
@@ -60,8 +50,8 @@ def publish_cmd(goal):
     #rospy.loginfo(goal.markers[0].header.stamp)
     time_diff = abs(int(goal.header.stamp.to_nsec()) - int(rospy.Time.now().to_nsec()))
     
-    if time_diff > 100000000:
-        rospy.loginfo("Last detection to old: " + str(time_diff))
+    if time_diff > 20000000:
+        rospy.loginfo("Last detection too old: " + str(time_diff))
         return
     rospy.loginfo("Transforming " + str(len(goal.markers)) + " markers")
     

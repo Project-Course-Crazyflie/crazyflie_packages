@@ -22,27 +22,25 @@ class image_converter:
     # Convert the image from ROS to OpenCV format?
     try:
       cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+      gray = self.bridge.imgmsg_to_cv2(data, "mono8")
+      #gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
     except CvBridgeError as e:
       print(e)
 
-    # Convert BGR to HSV
-    hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+    gray = np.float32(gray)
+    dst = cv2.cornerHarris(gray,2,3,0.04)
+    #result is dilated for marking the corners, not important
+    dst = cv2.dilate(dst,None)
+    # Threshold for an optimal value, it may vary depending on the image.
+    cv_image[dst>0.01*dst.max()]=[0,0,255]
+    res = cv_image
 
-    # define range of the color we look for in the HSV space
-    #lower = np.array([0,0,250])
-    #upper = np.array([255,5,255])
+    # Otsu's thresholding after Gaussian filtering
+    #blur = cv2.GaussianBlur(cv_image,(5,5),0)
+    #ret3,th3 = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    #res = th3
 
-    red = np.uint8([[[255,0,0]]])
-    hsv_r = cv2.cvtColor(red, cv2.COLOR_BGR2HSV)
-
-    lower = np.array([76-10, 255, 255])
-    upper = np.array([76+10, 255, 255])
-
-    # Threshold the HSV image to get only the pixels in ranage
-    mask = cv2.inRange(hsv, lower, upper)
-
-    # Bitwise-AND mask and original image
-    res = cv2.bitwise_and(cv_image, cv_image, mask= mask)
+    
 
     # Publish the image
     try:
