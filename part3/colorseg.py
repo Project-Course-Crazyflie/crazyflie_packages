@@ -63,7 +63,7 @@ class image_converter:
     
     wall_contours = []
     wall_poses = PoseArray()
-    wall_poses.header.frame_id = "camera_link"
+    wall_poses.header.frame_id = "cf1/camera_link"
     wall_poses.header.stamp = rospy.Time.now()
     for c in contours:
       l = cv2.arcLength(c, closed=True)
