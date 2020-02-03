@@ -7,7 +7,7 @@ import rospy
 import cv2
 import numpy as np
 from std_msgs.msg import String
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 
 import math
@@ -22,8 +22,13 @@ class image_converter:
 
     self.bridge = CvBridge()
     self.image_sub = rospy.Subscriber("/cf1/camera/image_raw", Image, self.callback)
+    self.cam_info_sub = rospy.Subscriber("/cf1/camera/camera_info", CameraInfo, self.cam_info_cb)
+    self.cam_info = None
 
     self.wall_pos_pub = rospy.Publisher("image/walls", PoseArray, queue_size=2)
+
+  def cam_info_cb(self, msg):
+    self.cam_info = msg
 
   def callback(self,data):
     # Convert the image from ROS to OpenCV format?
@@ -53,7 +58,7 @@ class image_converter:
     h, w = res.shape[:2]
     mask = np.zeros((h+2, w+2), np.uint8)
     # Floodfill from point (0, 0)
-    cv2.floodFill(im_floodfill, mask, (0,0), 255);
+    cv2.floodFill(im_floodfill, mask, (0,0), 255)
     # Invert floodfilled image
     im_floodfill_inv = cv2.bitwise_not(im_floodfill)
     # Combine the two images to get the foreground.
@@ -69,7 +74,7 @@ class image_converter:
       l = cv2.arcLength(c, closed=True)
       #rospy.loginfo("Arc-Length: " + str(l))
       if l < 200:
-        # not a wall
+        # not a wall. or wall far away
         continue
 
       wall_contours.append(c)
@@ -78,10 +83,24 @@ class image_converter:
       try:
         cx = int(M['m10']/M['m00'])
         cy = int(M['m01']/M['m00'])
-        p = Pose()
-        x = (cx - 320.5)/245.54354678
-        y = (cy - 240.5)/245.54354678
-        z = 1 #100/245.54354678
+        
+        ###
+        K = self.cam_info.K
+        K_inv = np.linalg.inv(np.array(K).reshape([3, 3]))
+        v = np.array([cx, cy, 1])
+        v_cam = np.matmul(K_inv, v)
+        ###
+        #x = (cx - 320.5)/245.54354678
+        #y = (cy - 240.5)/245.54354678
+        #z = 1 #100/245.54354678
+        x,y,z = v_cam
+        
+        
+        #z = z/area*dist_scale
+        #rospy.loginfo("K_inv: " + str(K_inv) )
+        #rospy.loginfo("V_true: " + str([x, y]) )
+        #rospy.loginfo("V_cam: " + str(v_cam))
+        
         
         """
         def skew(v):
@@ -110,10 +129,13 @@ class image_converter:
         #theta = 0
         q = quaternion_from_euler(0, yr, 0, 'rzyx') 
         
-        scale = 0.7
-        p.position.x = x - x*scale
-        p.position.y = y - y*scale
-        p.position.z = z - z*scale
+        area = cv2.contourArea(c)
+        rospy.loginfo("Area: " + str(area))
+        dist_scale = 12000/(area)
+        p = Pose()
+        p.position.x = x*dist_scale
+        p.position.y = y*dist_scale
+        p.position.z = z*dist_scale
         p.orientation.x = q[0]
         p.orientation.y = q[1]
         p.orientation.z = q[2]

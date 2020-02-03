@@ -22,6 +22,7 @@ from aruco_msgs.msg import Marker
 # Current goal (global state)
 goal = None
 pub_cmd = None
+last_msg = None
 
 def transform_from_marker(m):
     t = TransformStamped()
@@ -38,21 +39,19 @@ def detect_callback(msg):
    
 
 def publish_cmd(goal):
+    global last_msg
     br = tf2_ros.TransformBroadcaster()
     # Need to tell TF that the goal was just generated
     rospy.loginfo("Transforming from %s to map" % goal.header.frame_id)
-    #goal.header.stamp = rospy.Time.now()
-    #if not tf_buf.can_transform(goal.header.frame_id, "map", goal.header.stamp):
-    #    rospy.logwarn_throttle(5.0, 'No transform from %s to map' % goal.header.frame_id)
-    #    return
-    #rospy.loginfo(int(rospy.Time.now().to_nsec()))
-    #rospy.loginfo(int(goal.header.stamp.to_nsec()))
-    #rospy.loginfo(goal.markers[0].header.stamp)
-    time_diff = abs(int(goal.header.stamp.to_nsec()) - int(rospy.Time.now().to_nsec()))
+    #time_diff = abs(int(goal.header.stamp.to_nsec()) - int(rospy.Time.now().to_nsec()))
     
-    if time_diff > 20000000:
-        rospy.loginfo("Last detection too old: " + str(time_diff))
+    #if time_diff > 20000000:
+    #    rospy.loginfo("Last detection too old: " + str(time_diff))
+    #    return
+    if last_msg == goal:
+        # Allready processed
         return
+
     rospy.loginfo("Transforming " + str(len(goal.markers)) + " markers")
     
     transforms = []
@@ -62,19 +61,8 @@ def publish_cmd(goal):
         trans_m = transform_from_marker(m)
         transforms.append(trans_m)
         br.sendTransform(trans_m)
-        
-
-    #br.sendTransform(transforms, time=rospy.Time.now())
-        #rospy.loginfo(br.sendTransform.__doc__)
-
-#pub_cmd  = rospy.Publisher('/tf', VMarkerArray, queue_size=2)
-#pub_tf = rospy.Publisher("/tf", tf2_msgs.msg.TFMessage, queue_size=1)
-#br = tf2_ros.TransformBroadcaster()
-
+    last_msg = goal
 rospy.init_node('aruco_detection')
-#tf_buf   = tf2_ros.Buffer()
-#tf_lstn  = tf2_ros.TransformListener(tf_buf)
-#rospy.loginfo(dir(tf_buf))
 
 
 def main():
