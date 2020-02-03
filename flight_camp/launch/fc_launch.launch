@@ -23,4 +23,7 @@
     <node pkg="flight_camp" type="aruco_detection" name="aruco_detection"> 
     </node>
 
+    <node pkg="part3" type="colorseg.py" name="wall_detection"> 
+    </node>
+
 </launch>

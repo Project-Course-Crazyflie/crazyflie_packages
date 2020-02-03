@@ -11,6 +11,11 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 
+import math
+from tf.transformations import quaternion_from_matrix, euler_matrix, quaternion_from_euler
+from geometry_msgs.msg import PoseArray
+from geometry_msgs.msg import Pose
+
 class image_converter:
 
   def __init__(self):
@@ -18,6 +23,8 @@ class image_converter:
 
     self.bridge = CvBridge()
     self.image_sub = rospy.Subscriber("/cf1/camera/image_raw", Image, self.callback)
+
+    self.wall_pos_pub = rospy.Publisher("image/walls", PoseArray, queue_size=2)
 
   def callback(self,data):
     # Convert the image from ROS to OpenCV format?
@@ -54,20 +61,78 @@ class image_converter:
     res = res | im_floodfill_inv
 
     im2,contours,hierarchy = cv2.findContours(res, 1, 2)
-    #cv2.drawContours(cv_image, contours, -1, (255,0,0), 3)
+    
+    wall_contours = []
+    wall_poses = PoseArray()
+    wall_poses.header.frame_id = "camera_link"
+    wall_poses.header.stamp = rospy.Time.now()
     for c in contours:
+      l = cv2.arcLength(c, closed=True)
+      #rospy.loginfo("Arc-Length: " + str(l))
+      if l < 200:
+        # not a wall
+        continue
+
+      wall_contours.append(c)
+      
       M = cv2.moments(c, binaryImage=True)
       try:
         cx = int(M['m10']/M['m00'])
         cy = int(M['m01']/M['m00'])
+        p = Pose()
+        x = (cx - 320.5)/245.54354678
+        y = (cy - 240.5)/245.54354678
+        z = 1 #100/245.54354678
+        
+        """
+        def skew(v):
+            return np.array([[0, -v[2], v[1]],[v[2], 0, -v[0]],[-v[1], v[0], 0]])
+
+        a = np.array([1, 1, 1])
+        b = np.array([x, y, z])
+        b = b/np.linalg.norm(b)
+        c = a * b
+        v = np.cross(a, b)
+        R = np.eye(3) + skew(v) + np.square(skew(v))*1/(1 + c)
+        R = np.array([list(R[0,:]) + [0], list(R[1,:]) + [0], list(R[2,:]) + [0], [0,0,0,1]])
+        rospy.loginfo(R)
+        
+        v = np.array([x, y, z])
+        u = np.array([x, y, 0])
+        theta = np.dot(v, u)/(np.linalg.norm(v)*np.linalg.norm(u))
+        """
+
+        
+        xr = np.arctan2(z, y)
+        yr = -np.arctan2(z, x)
+        zr = np.arctan2(y, x)
+        #xy_norm = np.linalg.norm([x,y])
+        #theta = -np.arctan2(z, xy_norm)
+        #theta = 0
+        q = quaternion_from_euler(0, yr, 0, 'rzyx') 
+        
+        scale = 0.7
+        p.position.x = x - x*scale
+        p.position.y = y - y*scale
+        p.position.z = z - z*scale
+        p.orientation.x = q[0]
+        p.orientation.y = q[1]
+        p.orientation.z = q[2]
+        p.orientation.w = q[3]
+        #p.position.z = 1/245.54354678
+
+        wall_poses.poses.append(p)
       except ZeroDivisionError:
         pass
       else:
         cv2.circle(cv_image, (cx,cy), 50, 255)
 
+    cv2.drawContours(cv_image, wall_contours, -1, (255,0,0), 3)
+
     # Publish the image
     try:
       self.image_pub.publish(self.bridge.cv2_to_imgmsg(cv_image, "bgr8"))
+      self.wall_pos_pub.publish(wall_poses)
       #self.image_pub.publish(self.bridge.cv2_to_imgmsg(res, "mono8"))
     except CvBridgeError as e:
       print(e)
