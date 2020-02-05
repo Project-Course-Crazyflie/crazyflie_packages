@@ -5,7 +5,7 @@ import numpy as np
 import rospy
 import tf2_ros
 import tf2_geometry_msgs
-from tf.transformations import euler_from_quaternion
+from tf.transformations import euler_from_quaternion, quaternion_from_euler, quaternion_multiply
 from geometry_msgs.msg import PoseStamped
 from crazyflie_driver.msg import Position
 
@@ -39,11 +39,57 @@ class Navigator:
                 g = np.array([g.pose.position.x, g.pose.position.y, g.pose.position.z])
                 curr = np.array([self.cf1_pose.pose.position.x, self.cf1_pose.pose.position.y, self.cf1_pose.pose.position.z])
                 
-                err = np.linalg.norm(g-curr)
+                diff = g-curr
+                err = np.linalg.norm(diff)
                 at_waypoint = err < 0.2
                 rospy.loginfo("At goal?: " + str(at_waypoint))
                 if at_waypoint:
+                    #pass
                     self.goal_idx += 1
+                
+                """
+                # TODO: change help functions to handle abs(theta) > 2*pi
+                def zeroto2pi(theta):
+                    #if theta < 0:
+                    #    return theta + 2*np.pi
+                    return theta
+
+                target_angle = zeroto2pi(np.arctan2(diff[1], diff[0]))
+                q_orig = [self.cf1_pose.pose.orientation.x, 
+                        self.cf1_pose.pose.orientation.y,
+                        self.cf1_pose.pose.orientation.z,
+                        self.cf1_pose.pose.orientation.w]
+                curr_angle = zeroto2pi(euler_from_quaternion(q_orig)[2])
+                diff_angle = target_angle-curr_angle
+
+                rospy.loginfo("Current: " + str(curr_angle))
+                rospy.loginfo("Target: " + str(target_angle))
+
+                def minuspitopi(theta):
+                    if theta > np.pi:
+                        return -2*np.pi + theta
+                    elif theta < -np.pi:
+                        return 2*np.pi + theta
+                    return theta
+
+                if diff_angle < 0:
+                    safe_angle = curr_angle-np.pi/8
+                    theta = np.max([target_angle, safe_angle])
+                else:
+                    safe_angle = curr_angle+np.pi/8
+                    theta = np.min([target_angle, safe_angle])
+                
+                theta = minuspitopi(theta)
+                """  
+                theta = np.arctan2(diff[1], diff[0])
+                rospy.loginfo("New: " + str(theta))
+                q_rot = quaternion_from_euler(0, 0, theta,"sxyz")
+
+                #q_new = quaternion_multiply(q_rot, q_orig)
+                goal.pose.orientation.x = q_rot[0]
+                goal.pose.orientation.y = q_rot[1]
+                goal.pose.orientation.z = q_rot[2]
+                goal.pose.orientation.w = q_rot[3]
                 self.goal_top.publish(goal)
             else:
                 rospy.loginfo("Waiting for cf1 pose...")
