@@ -57,7 +57,7 @@ tf_buf   = tf2_ros.Buffer()
 tf_lstn  = tf2_ros.TransformListener(tf_buf)
 
 def main():
-    rate = rospy.Rate(10)  # Hz
+    rate = rospy.Rate(20)  # Hz
     while not rospy.is_shutdown():
         if goal:
             publish_cmd(goal)

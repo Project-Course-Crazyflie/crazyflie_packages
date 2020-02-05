@@ -31,6 +31,7 @@ class image_converter:
     self.cam_info = msg
 
   def callback(self,data):
+    if not self.cam_info: return
     # Convert the image from ROS to OpenCV format?
     try:
       cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")

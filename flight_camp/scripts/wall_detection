@@ -56,7 +56,7 @@ def publish_cmd(goal):
 #pub_tf = rospy.Publisher("/tf", tf2_msgs.msg.TFMessage, queue_size=1)
 #br = tf2_ros.TransformBroadcaster()
 
-rospy.init_node('aruco_detection')
+rospy.init_node('wall_detection')
 #tf_buf   = tf2_ros.Buffer()
 #tf_lstn  = tf2_ros.TransformListener(tf_buf)
 #rospy.loginfo(dir(tf_buf))
