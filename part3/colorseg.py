@@ -135,7 +135,7 @@ class image_converter:
         dist_scale = 12000/(area)
         p = Pose()
         p.position.x = x*dist_scale
-        p.position.y = y*dist_scale
+        #p.position.y = y#*dist_scale
         p.position.z = z*dist_scale
         p.orientation.x = q[0]
         p.orientation.y = q[1]

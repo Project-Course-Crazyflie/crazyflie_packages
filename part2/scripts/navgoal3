@@ -51,7 +51,7 @@ def publish_cmd(goal):
 
 
 rospy.init_node('navgoal3')
-sub_goal = rospy.Subscriber('/move_base_simple/goal', PoseStamped, goal_callback)
+sub_goal = rospy.Subscriber('cf1/move_to', PoseStamped, goal_callback)
 pub_cmd  = rospy.Publisher('/cf1/cmd_position', Position, queue_size=2)
 tf_buf   = tf2_ros.Buffer()
 tf_lstn  = tf2_ros.TransformListener(tf_buf)

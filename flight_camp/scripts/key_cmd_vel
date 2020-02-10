@@ -1,0 +1,44 @@
+#!/usr/bin/env python
+
+import rospy
+import tf2_ros
+import tf2_geometry_msgs
+from geometry_msgs.msg import Twist
+from crazyflie_driver.msg import Hover
+
+# Current goal (global state)
+goal = None
+
+def goal_callback(msg):
+    global goal
+    
+    g = Hover()
+    #g.header.stamp = msg.header.stamp
+    #g.header.frame_id = "cf1/odom"
+    g.zDistance = 0.5
+    g.vx = msg.linear.x
+    g.yawrate = -msg.angular.z*50
+
+    goal = g
+
+def publish_cmd(goal):
+
+
+    pub_cmd.publish(goal)
+
+
+rospy.init_node('key_cmd_vel')
+sub = rospy.Subscriber("/key_vel", Twist, goal_callback)
+pub_cmd = rospy.Publisher("/cf1/cmd_hover", Hover, queue_size=2)
+
+def main():
+    rate = rospy.Rate(20)  # Hz
+    while not rospy.is_shutdown():
+        a=raw_input('gredggtrd')
+        if goal:
+            
+            publish_cmd(goal)
+        rate.sleep()
+
+if __name__ == '__main__':
+    main()
