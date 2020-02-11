@@ -1,0 +1,69 @@
+#! /usr/bin/env python
+
+import math
+import rospy
+import tf
+import tf2_ros
+import tf2_geometry_msgs
+from geometry_msgs.msg import PoseStamped
+from crazyflie_driver.msg import Position
+from tf.transformations import euler_from_quaternion
+
+curr_pos = None
+
+
+
+def pose_callback(msg):
+	global curr_pos
+	curr_pos = msg
+	return
+
+def send_goal(checkpoint):
+	goal = Position()
+	goal.header.stamp = rospy.Time.now()
+	goal.header.frame_id = 'cf1/odom'
+	goal.x = checkpoint[0]
+	goal.y = checkpoint[1]
+	goal.z = 0.5#checkpoint[2]
+	goal.yaw = checkpoint[3]
+
+	try:
+		goal_pub.publish(goal)
+		print('publishing command: ' + str(cmd.x) +' '+ str(cmd.y) +' '+ str(cmd.z))
+	except:
+		print('could not publish command')
+	return
+
+rospy.init_node('move_to')
+sub_aruco = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
+goal_pub = rospy.Publisher('cf1/cmd_position', Position, queue_size=1)
+tf_buf   = tf2_ros.Buffer()
+tf_lstn  = tf2_ros.TransformListener(tf_buf)
+
+def main():
+	print('I take inputs x meters forward and n turns, just put space inbetween.')
+	nums = raw_input("x n?")
+	nums = nums.split(' ')
+	nums[0] = float(nums[0])
+	nums[1] = float(nums[1])*360 + 180
+
+	rate = rospy.Rate(10)  # Hz
+	while not rospy.is_shutdown():
+		if curr_pos and has_goal:
+			dx = abs(curr_pos.pose.position.x - checkpoint[0])
+			dy = abs(curr_pos.pose.position.y - checkpoint[1])
+			#dz = abs(curr_pos.pose.pose.z - checkpoints[curr_check]['position'][2])
+			#print('dx+dy: ', dx + dy)
+			if math.sqrt(dx**2 + dy**2) < 0.09:
+				has_goal = False
+			else:
+				send_goal(checkpoint)
+		else:
+			for a in range(len(checkpoint)):
+				checkpoint[a] = float(checkpoint[a])
+			has_goal = True
+
+    	rate.sleep()
+
+if __name__ == "__main__":
+	main()
