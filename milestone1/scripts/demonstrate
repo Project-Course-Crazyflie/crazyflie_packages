@@ -6,7 +6,7 @@ import tf
 import tf2_ros
 from geometry_msgs.msg import PoseStamped
 from crazyflie_driver.msg import Position, Hover
-from tf.transformations import euler_from_quaternion
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 curr_pos = None
 
@@ -18,68 +18,98 @@ def pose_callback(msg):
 	return
 
 def send_goal(checkpoint):
-	goal = Position()
+	goal = PoseStamped()
 	goal.header.stamp = rospy.Time.now()
 	goal.header.frame_id = 'cf1/base_link'
-	goal.x = checkpoint[0]
-	goal.y = checkpoint[1]
-	goal.z = checkpoint[2]
-	goal.yaw = checkpoint[3]
+	goal.pose.position.x = checkpoint[0]
+	goal.pose.position.y = checkpoint[1]
+	goal.pose.position.z = checkpoint[2]
 
-	#try:
+	x,y,z,w = quaternion_from_euler((0,0,checkpoint[3]))
+
+	goal.pose.orientation.x = x
+	goal.pose.orientation.y = y
+	goal.pose.orientation.z = z
+	goal.pose.orientation.w = w
+
 	pos_pub.publish(goal)
-	#	print('publishing command: ' + str(cmd.x) +' '+ str(cmd.y) +' '+ str(cmd.z))
-	#except:
-	#	print('could not publish command')
 	return
 
+"""
 def spin():
 	g = Hover()
 	g.zDistance = 0.5
 	g.yawrate = msg.angular.z*150
 	hov_pub.publish(g)
 	return
+"""
 
-rospy.init_node('move_to')
-sub_aruco = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
-pos_pub = rospy.Publisher('cf1/move_to', Position, queue_size=2)
+rospy.init_node('demonstrate')
+sub_pose = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
+pos_pub = rospy.Publisher('cf1/move_to', PoseStamped, queue_size=2)
 #hov_pub = rospy.Publisher('cf1/cmd_hover', Hover, queue_size=2)
 tf_buf   = tf2_ros.Buffer()
 tf_lstn  = tf2_ros.TransformListener(tf_buf)
 
 def main():
-	print('I take inputs x meters forward and n turns, just put space inbetween.')
-	nums = raw_input("x n?")
+	print('Gimme x meters forward and n turns, just put space inbetween.')
+	nums = raw_input("x n:")
 	nums = nums.split(' ')
 	nums[0] = float(nums[0])
 	nums[1] = float(nums[1])
+
+	rot_point = position()
+	rot_point.header.stamp = rospy.Time.now()
+	rot_point.header.frame_id = 'cf1/base_link'
+	rot_point.x = float(nums[0]) # x position to rotate at in base_link frame
+	rot_point.y = 0
+	rot_point.z = 0.5
+	rot_point.yaw = 0
+
+
+	while not tf_buf.canTransform('cf1/base_link','cf1/odom'):
+		print('can not transform yet')
+	rot_point = tf_buf.transform(rot_point,'cf1/odom') #where the drone will rotate in the odom frame
+
 	part = 0
 	#turns_done = 0
 	#done_lap = False
-	stay_a_while_and_listen = 50
+	T = 5
+	wait_a_little = 10 * T #10 times T seconds
 
 	rate = rospy.Rate(10)  # Hz
 	while not rospy.is_shutdown():
 		if curr_pos:
-			curr_pos = tf_buf.transform(curr_pos,'cf1/base_link')
 
-			if stay_a_while_and_listen > 0:
-				stay_a_while_and_listen -= 1
+			#Make sure nto only post a message once, since they're in base_link frame
+			if wait_a_little == 10 * T:
 				send_goal([0,0,0.5,0])
+			if wait_a_little > 0:
+				wait_a_little -= 1
 
 			#go X meters forward
 			if part == 0:
-				dx = abs(curr_pos.pose.position.x - nums[0])
-				dy = abs(curr_pos.pose.position.y)
-				
+				print('starting state machine')
+				send_goal([nums[0],0,0,0])
+				part = 1
+				print('going to state 1')
+			elif part == 1:
+				dx = abs(curr_pos.pose.position.x - rot_point.x)
+				dy = abs(curr_pos.pose.position.y - rot_point.y)
+
 				if math.sqrt(dx**2 + dy**2) < 0.09:
 					part += 1
-				else:
-					send_goal([nums[0],0,0.5,0)
+					print('going to state 2')
 
 			#spin n laps
-			elif part == 1:
-				send_goal([nums[0], 0, 0.5, nums[1]*360])
+			elif part == 2:
+				__, ___, original_yaw = euler_from_quaternion((curr_pos.pose.orientation.x,
+															   curr_pos.pose.orientation.y,
+															   curr_pos.pose.orientation.z,
+															   curr_pos.pose.orientation.w))
+				send_goal([0, 0, 0, nums[1]*360 + 180])
+				part += 1
+				print('going to state 3')
 				"""
 				roll, pitch, yaw = euler_from_quaternion((curr_pos.pose.orientation.x,
 														curr_pos.pose.orientation.y,
@@ -95,19 +125,22 @@ def main():
 						turns_done += 1
 				spin()
 				"""
+			elif part == 3:
+				roll, pitch, yaw = euler_from_quaternion((curr_pos.pose.orientation.x,
+														  curr_pos.pose.orientation.y,
+														  curr_pos.pose.orientation.z,
+														  curr_pos.pose.orientation.w))
+				if abs(yaw - (original_yaw + nums[1]*360 + 180)) < 1
+					part += 1
+					print('going to state 4')
 
 			#now go back and float at the origin
-			elif part == 2:
-				send_goal([origin[0],origin[1],0.5,origin[3]])
-				dx = abs(curr_pos.pose.position.x - origin[0])
-				dy = abs(curr_pos.pose.position.y - origin[1])
-				dyaw = abs(yaw - origin[3])
-				if math.sqrt(dx**2 + dy**2 + dyaw**2) < 0.1:
-					print('I feel done')
-			print('dx', dx, curr_pos.pose.position.x, origin[0])
-			print('dy', dy, curr_pos.pose.position.y, origin[1])
+			elif part == 4:
+				send_goal([nums[0],0,0,0])
+				print('When I stop moving I\'m done\nExiting')
+				return
 
-    	rate.sleep()
+		rate.sleep()
 
 if __name__ == "__main__":
 	main()
