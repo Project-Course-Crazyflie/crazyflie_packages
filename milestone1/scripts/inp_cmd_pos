@@ -11,7 +11,7 @@ class InpCmdPos:
         self.cf1_pos_top = rospy.Subscriber('/cf1/pose', PoseStamped, self.cf1_pose_callback)        
         self.cf1_pose = None
 
-        self.debug_pub = rospy.Publisher("cf1/pose", PoseStamped, queue_size=2)
+        #self.debug_pub = rospy.Publisher("cf1/pose", PoseStamped, queue_size=2)
 
     def cf1_pose_callback(self, msg):
         self.cf1_pose = msg
@@ -23,15 +23,14 @@ class InpCmdPos:
             
             try:
                 x,y,rel = [float(p.strip()) for p in pos.split(",")]
+                x = -x
             except:
                 rospy.loginfo("Something went wrong...")
             else:
-                if rel == -1:
-                    # debugging
-                    p = PoseStamped()
-                    p.pose.position.x, p.pose.position.y = x, y
-                    self.temp.publish(p)
-                elif rel and self.cf1_pose:
+                rospy.loginfo("Relative: {}".format(rel))
+                rospy.loginfo("Cf1 pose: {}".format(self.cf1_pose))
+                if rel and self.cf1_pose:
+                    rospy.loginfo("Creating relative goal...")
                     x += self.cf1_pose.pose.position.x
                     y += self.cf1_pose.pose.position.y
                 goal = PoseStamped()

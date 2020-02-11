@@ -6,11 +6,10 @@
     </node> -->
     <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom_trans" args="0.5 0.5 0 0 0 0 map cf1/odom">
     </node> -->
-
     <node pkg="milestone1" type="navgoal" name="navgoal_publisher">
     </node>
-
     <node pkg="milestone1" type="fc3.py" name="stop_sign_detection"> 
     </node>
+    
 
 </launch>
