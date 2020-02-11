@@ -54,8 +54,8 @@ def main():
 	nums[0] = float(nums[0])
 	nums[1] = float(nums[1])
 	part = 0
-	turns_done = 0
-	done_lap = False
+	#turns_done = 0
+	#done_lap = False
 	stay_a_while_and_listen = 50
 
 	rate = rospy.Rate(10)  # Hz
@@ -72,16 +72,14 @@ def main():
 				dx = abs(curr_pos.pose.position.x - nums[0])
 				dy = abs(curr_pos.pose.position.y)
 				
-				#dz = abs(curr_pos.pose.pose.z - checkpoints[curr_check]['position'][2])
-				#print('dx+dy: ', dx + dy)
 				if math.sqrt(dx**2 + dy**2) < 0.09:
 					part += 1
 				else:
-					send_goal([origin[0] + nums[0],origin[1],0.5,origin[3]])
+					send_goal([nums[0],0,0.5,0)
 
 			#spin n laps
 			elif part == 1:
-				send_goal([origin[0] + nums[0], origin[0], 0.5, nums[1]*360])
+				send_goal([nums[0], 0, 0.5, nums[1]*360])
 				"""
 				roll, pitch, yaw = euler_from_quaternion((curr_pos.pose.orientation.x,
 														curr_pos.pose.orientation.y,
