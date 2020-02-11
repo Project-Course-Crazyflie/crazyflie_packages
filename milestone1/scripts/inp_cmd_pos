@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+
+import rospy
+import tf2_ros
+import tf2_geometry_msgs
+from geometry_msgs.msg import Twist, PoseStamped
+
+class InpCmdPos:
+    def __init__(self):
+        self.pub_cmd = rospy.Publisher("cf1/move_to", PoseStamped, queue_size=2)
+        self.cf1_pos_top = rospy.Subscriber('/cf1/pose', PoseStamped, self.cf1_pose_callback)        
+        self.cf1_pose = None
+
+        self.debug_pub = rospy.Publisher("cf1/pose", PoseStamped, queue_size=2)
+
+    def cf1_pose_callback(self, msg):
+        self.cf1_pose = msg
+
+    def spin(self):
+        rate = rospy.Rate(20)  # Hz
+        while not rospy.is_shutdown():
+            pos = raw_input('x, y, relative (0/1) = ')
+            
+            try:
+                x,y,rel = [int(p) for p in pos.split(",")]
+            except:
+                rospy.loginfo("Something went wrong...")
+            else:
+                if rel == -1:
+                    # debugging
+                    p = PoseStamped()
+                    p.pose.position.x, p.pose.position.y = x, y
+                    self.temp.publish(p)
+                elif rel and self.cf1_pose:
+                    x += self.cf1_pose.pose.position.x
+                    y += self.cf1_pose.pose.position.y
+                goal = PoseStamped()
+                goal.pose.position.x, goal.pose.position.y = x, y
+                goal.z = 0.5
+                self.pub_cmd.publish(goal)
+                rospy.loginfo("Publishing goal ({}, {})...".format(goal.pose.position.x, goal.pose.position.y))
+            rate.sleep()
+
+
+if __name__ == '__main__':
+    rospy.init_node('inp_cmd_pos')
+    InpCmdPos().spin()

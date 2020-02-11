@@ -34,7 +34,6 @@ pub_cmd = rospy.Publisher("/cf1/cmd_hover", Hover, queue_size=2)
 def main():
     rate = rospy.Rate(20)  # Hz
     while not rospy.is_shutdown():
-        a=raw_input('gredggtrd')
         if goal:
             
             publish_cmd(goal)

@@ -1,0 +1,65 @@
+#!/usr/bin/env python
+
+import math
+import numpy as np
+import rospy
+import tf2_ros
+import tf2_geometry_msgs
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from geometry_msgs.msg import PoseStamped, Bool
+from crazyflie_driver.msg import Position
+
+class AtGoal:
+    def __init__(self):
+        self.goal_top = rospy.Subscriber('cf1/move_to', PoseStamped, self.goal_pose_callback)
+        self.goal = None
+        self.cf1_pos_top = rospy.Subscriber('/cf1/pose', PoseStamped, self.cf1_pose_callback)
+        self.cf1_pose = None
+        self.at_goal_top = rospy.Publisher("cf1/at_goal", Bool, queue_size=2)
+
+    def goal_pose_callback(self, msg):
+        self.goal = goal
+
+    def cf1_pose_callback(self, msg):
+        self.cf1_pose = msg
+
+    def at_goal(self):
+        if not self.cf1_pose:
+            rospy.loginfo("Waiting for cf1/pose...")
+            return False
+        if not self.goal:
+            rospy.loginfo("No goal is set...")
+            return False
+
+        g = np.array([self.goal.pose.position.x, self.goal.pose.position.y, self.goal.pose.position.z])
+        curr = np.array([self.cf1_pose.pose.position.x, self.cf1_pose.pose.position.y, self.cf1_pose.pose.position.z])
+        
+        yaw_act = euler_from_quaternion([self.cf1_pose.pose.orientation.x, 
+                                        self.cf1_pose.pose.orientation.y, 
+                                        self.cf1_pose.pose.orientation.z, 
+                                        self.cf1_pose.pose.orientation.w])
+
+        yaw_goal = euler_from_quaternion([self.goal.pose.orientation.x, 
+                                        self.goal.pose.orientation.y, 
+                                        self.goal.pose.orientation.z, 
+                                        self.goal.pose.orientation.w])
+
+        
+        diff = g-curr
+        err = np.linalg.norm(diff)
+
+        err_yaw = np.abs(yaw_act[2]-yaw_goal[2])
+
+        at_waypoint = err < 0.2 and err_yaw < 0.1
+        rospy.loginfo("At goal?: " + str(at_waypoint))
+        return at_waypoint
+
+    def spin(self):
+        rate = rospy.Rate(20)  # Hz
+        while not rospy.is_shutdown():
+            self.at_goal_top.publish(Bool(self.at_goal()))
+            rate.sleep()
+
+if __name__ == '__main__':
+    rospy.init_node('at_goal_node')
+    s.start()
