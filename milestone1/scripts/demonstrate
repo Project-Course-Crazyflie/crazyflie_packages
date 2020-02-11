@@ -20,29 +20,30 @@ def pose_callback(msg):
 def send_goal(checkpoint):
 	goal = Position()
 	goal.header.stamp = rospy.Time.now()
-	goal.header.frame_id = 'cf1/odom'
+	goal.header.frame_id = 'cf1/base_link'
 	goal.x = checkpoint[0]
 	goal.y = checkpoint[1]
-	goal.z = 0.5#checkpoint[2]
+	goal.z = checkpoint[2]
 	goal.yaw = checkpoint[3]
 
-	try:
-		goal_pub.publish(goal)
-		print('publishing command: ' + str(cmd.x) +' '+ str(cmd.y) +' '+ str(cmd.z))
-	except:
-		print('could not publish command')
+	#try:
+	pos_pub.publish(goal)
+	#	print('publishing command: ' + str(cmd.x) +' '+ str(cmd.y) +' '+ str(cmd.z))
+	#except:
+	#	print('could not publish command')
 	return
 
 def spin():
 	g = Hover()
-    g.zDistance = 0.5
-    g.yawrate = msg.angular.z*150
+	g.zDistance = 0.5
+	g.yawrate = msg.angular.z*150
+	hov_pub.publish(g)
 	return
 
 rospy.init_node('move_to')
 sub_aruco = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
-pos_pub = rospy.Publisher('cf1/cmd_position', Position, queue_size=1)
-pos_pub = rospy.Publisher('cf1/cmd_hover', Hover, queue_size=1)
+pos_pub = rospy.Publisher('cf1/move_to', Position, queue_size=2)
+#hov_pub = rospy.Publisher('cf1/cmd_hover', Hover, queue_size=2)
 tf_buf   = tf2_ros.Buffer()
 tf_lstn  = tf2_ros.TransformListener(tf_buf)
 
@@ -55,22 +56,37 @@ def main():
 	part = 0
 	turns_done = 0
 	done_lap = False
+	stay_a_while_and_listen = 50
 
 	rate = rospy.Rate(10)  # Hz
 	while not rospy.is_shutdown():
 		if curr_pos:
+			curr_pos = tf_buf.transform(curr_pos,'cf1/base_link')
+
+			if stay_a_while_and_listen > 0:
+				stay_a_while_and_listen -= 1
+				send_goal([0,0,0.5,0])
+
+			#go X meters forward
 			if part == 0:
 				dx = abs(curr_pos.pose.position.x - nums[0])
 				dy = abs(curr_pos.pose.position.y)
+				
 				#dz = abs(curr_pos.pose.pose.z - checkpoints[curr_check]['position'][2])
 				#print('dx+dy: ', dx + dy)
 				if math.sqrt(dx**2 + dy**2) < 0.09:
 					part += 1
 				else:
-					send_goal([nums[0],0,0.5,0])
+					send_goal([origin[0] + nums[0],origin[1],0.5,origin[3]])
 
+			#spin n laps
 			elif part == 1:
-				yaw, pitch, roll = euler_from_quaternion(curr_pos.pose.orientation)
+				send_goal([origin[0] + nums[0], origin[0], 0.5, nums[1]*360])
+				"""
+				roll, pitch, yaw = euler_from_quaternion((curr_pos.pose.orientation.x,
+														curr_pos.pose.orientation.y,
+														curr_pos.pose.orientation.z,
+														curr_pos.pose.orientation.w))
 				if yaw < 90 and done_lap:
 					done_lap = False
 				if yaw > 270 and not done_lap:
@@ -80,9 +96,18 @@ def main():
 						done_lap = True
 						turns_done += 1
 				spin()
+				"""
 
+			#now go back and float at the origin
 			elif part == 2:
-					send_goal([nums[0],0,180.5,0])
+				send_goal([origin[0],origin[1],0.5,origin[3]])
+				dx = abs(curr_pos.pose.position.x - origin[0])
+				dy = abs(curr_pos.pose.position.y - origin[1])
+				dyaw = abs(yaw - origin[3])
+				if math.sqrt(dx**2 + dy**2 + dyaw**2) < 0.1:
+					print('I feel done')
+			print('dx', dx, curr_pos.pose.position.x, origin[0])
+			print('dy', dy, curr_pos.pose.position.y, origin[1])
 
     	rate.sleep()
 

@@ -22,7 +22,7 @@ class InpCmdPos:
             pos = raw_input('x, y, relative (0/1) = ')
             
             try:
-                x,y,rel = [int(p) for p in pos.split(",")]
+                x,y,rel = [float(p.strip()) for p in pos.split(",")]
             except:
                 rospy.loginfo("Something went wrong...")
             else:
@@ -35,8 +35,10 @@ class InpCmdPos:
                     x += self.cf1_pose.pose.position.x
                     y += self.cf1_pose.pose.position.y
                 goal = PoseStamped()
+                goal.header.stamp = rospy.Time.now()
+                goal.header.frame_id = "cf1/odom"
                 goal.pose.position.x, goal.pose.position.y = x, y
-                goal.z = 0.5
+                goal.pose.position.z = 0.5
                 self.pub_cmd.publish(goal)
                 rospy.loginfo("Publishing goal ({}, {})...".format(goal.pose.position.x, goal.pose.position.y))
             rate.sleep()
