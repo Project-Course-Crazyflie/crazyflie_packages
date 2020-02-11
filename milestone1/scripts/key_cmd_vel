@@ -22,8 +22,6 @@ def goal_callback(msg):
     goal = g
 
 def publish_cmd(goal):
-
-
     pub_cmd.publish(goal)
 
 
