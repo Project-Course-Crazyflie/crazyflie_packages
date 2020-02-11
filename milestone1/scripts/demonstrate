@@ -4,9 +4,8 @@ import math
 import rospy
 import tf
 import tf2_ros
-import tf2_geometry_msgs
 from geometry_msgs.msg import PoseStamped
-from crazyflie_driver.msg import Position
+from crazyflie_driver.msg import Position, Hover
 from tf.transformations import euler_from_quaternion
 
 curr_pos = None
@@ -34,9 +33,16 @@ def send_goal(checkpoint):
 		print('could not publish command')
 	return
 
+def spin():
+	g = Hover()
+    g.zDistance = 0.5
+    g.yawrate = msg.angular.z*150
+	return
+
 rospy.init_node('move_to')
 sub_aruco = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
-goal_pub = rospy.Publisher('cf1/cmd_position', Position, queue_size=1)
+pos_pub = rospy.Publisher('cf1/cmd_position', Position, queue_size=1)
+pos_pub = rospy.Publisher('cf1/cmd_hover', Hover, queue_size=1)
 tf_buf   = tf2_ros.Buffer()
 tf_lstn  = tf2_ros.TransformListener(tf_buf)
 
@@ -45,23 +51,38 @@ def main():
 	nums = raw_input("x n?")
 	nums = nums.split(' ')
 	nums[0] = float(nums[0])
-	nums[1] = float(nums[1])*360 + 180
+	nums[1] = float(nums[1])
+	part = 0
+	turns_done = 0
+	done_lap = False
 
 	rate = rospy.Rate(10)  # Hz
 	while not rospy.is_shutdown():
-		if curr_pos and has_goal:
-			dx = abs(curr_pos.pose.position.x - checkpoint[0])
-			dy = abs(curr_pos.pose.position.y - checkpoint[1])
-			#dz = abs(curr_pos.pose.pose.z - checkpoints[curr_check]['position'][2])
-			#print('dx+dy: ', dx + dy)
-			if math.sqrt(dx**2 + dy**2) < 0.09:
-				has_goal = False
-			else:
-				send_goal(checkpoint)
-		else:
-			for a in range(len(checkpoint)):
-				checkpoint[a] = float(checkpoint[a])
-			has_goal = True
+		if curr_pos:
+			if part == 0:
+				dx = abs(curr_pos.pose.position.x - nums[0])
+				dy = abs(curr_pos.pose.position.y)
+				#dz = abs(curr_pos.pose.pose.z - checkpoints[curr_check]['position'][2])
+				#print('dx+dy: ', dx + dy)
+				if math.sqrt(dx**2 + dy**2) < 0.09:
+					part += 1
+				else:
+					send_goal([nums[0],0,0.5,0])
+
+			elif part == 1:
+				yaw, pitch, roll = euler_from_quaternion(curr_pos.pose.orientation)
+				if yaw < 90 and done_lap:
+					done_lap = False
+				if yaw > 270 and not done_lap:
+					if turns_done == nums[1]:
+						part = 2
+					else:
+						done_lap = True
+						turns_done += 1
+				spin()
+
+			elif part == 2:
+					send_goal([nums[0],0,180.5,0])
 
     	rate.sleep()
 
