@@ -8,11 +8,20 @@ from std_msgs.msg import String
 import numpy as np
 import rospy
 
+mtx  = np.load('mtx.npy')
+dist = np.load('dist.npy')
+newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(640,480),1,(640,480))
+
 def image_callback(img_msg):
     #convert image from ROS format to CV
     bridge = CvBridge()
     try:
+    # verify the undistorted video stream        
         cv_image = bridge.imgmsg_to_cv2(img_msg, 'bgr8')
+        #dst = cv2.undistort(cv_image, mtx, dist, None, newcameramtx)
+        #x,y,w,h = roi
+        #cv_image = dst[y:y+h, x:x+w]
+
     except CvBridgeError as e:
         print(e)
     
@@ -20,14 +29,20 @@ def image_callback(img_msg):
     hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
     # define range of the color we look for in the HSV space, trial and error kind of (HEX to HSV)
-    lower= np.array([170, 50, 50])
-    upper = np.array([179, 255, 255])
+    lower0 = np.array([170, 10, 30])
+    upper0 = np.array([179, 255, 255])
+
+    lower1 = np.array([0, 10, 30])
+    upper1 = np.array([5, 255, 255])
 
     # Threshold the HSV image to get only the pixels in ranage
-    gray = cv2.inRange(hsv, lower, upper)
+    gray0 = cv2.inRange(hsv, lower0, upper0)
+    gray1 = cv2.inRange(hsv, lower1, upper1)
+
+    gray = cv2.bitwise_or(gray0, gray1)
 
     #Blur with Gaussian Filtering, NO BLUR SINCE IT DETECTS THE SIGNS, but you need it in irl because of much noise
-    gray = cv2.GaussianBlur(gray, (5,5),  1)
+    gray = cv2.GaussianBlur(gray, (5,5),  2)
 
     kernel = np.ones((5,5),np.uint8)
     
@@ -60,17 +75,23 @@ def image_callback(img_msg):
                 cv_image = cv2.drawContours(cv_image, c, -1, (255,0,0), 2)
                 cv_image = cv2.circle(cv_image,(cx,cy), 4, (255,0,0), -1 )
             
-                
+            """    
             elif current_hierarchy[2] < 0:
                 #Innermost child components
                 cv_image = cv2.drawContours(cv_image, c, -1, (0,255,0), 2 )
-        
+            """
         font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(cv_image,'STOP sign detected',(10,20), font, 2,(255,255,0),2,cv2.LINE_AA)
-        
+        color = (0, 0 ,0)
+        text_placement = (10,50)
+        cv2.putText(cv_image,'STOP sign detected', text_placement, font, 2,color,1,cv2.LINE_AA)
+        print(center_mass)
     
     except TypeError:
-        print("No STOP sign detected")
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        color = (0, 0 ,0)
+        text_placement = (10,50)
+        cv2.putText(cv_image,'No STOP sign detected', text_placement, font, 2,color,1,cv2.LINE_AA)
+
 
     try:
         #Convert back to ROS format from CV and publish to the topic /my
