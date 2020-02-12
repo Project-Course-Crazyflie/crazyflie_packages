@@ -16,7 +16,7 @@ def image_callback(img_msg):
     #convert image from ROS format to CV
     bridge = CvBridge()
     try:
-    # verify the undistorted video stream        
+    # verify the undistorted video stream
         cv_image = bridge.imgmsg_to_cv2(img_msg, 'bgr8')
         #dst = cv2.undistort(cv_image, mtx, dist, None, newcameramtx)
         #x,y,w,h = roi
@@ -24,7 +24,7 @@ def image_callback(img_msg):
 
     except CvBridgeError as e:
         print(e)
-    
+
     # Convert BGR to HSV
     hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
@@ -45,27 +45,27 @@ def image_callback(img_msg):
     gray = cv2.GaussianBlur(gray, (5,5),  2)
 
     kernel = np.ones((5,5),np.uint8)
-    
-    #Erosion, the kernel slides through the image (2D convolution). 1 or zeros. A pixel in the original image considered 1 if all pixels under the kernel is 1. 
+
+    #Erosion, the kernel slides through the image (2D convolution). 1 or zeros. A pixel in the original image considered 1 if all pixels under the kernel is 1.
     gray = cv2.erode(gray, kernel, iterations = 2)
     #Dilate, , a pixel element is 1 if atleast one pixel under the kernel is 1
     gray = cv2.dilate(gray, kernel, iterations = 4)
 
-    
+
     _, contours, hierarchy = cv2.findContours(gray,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_NONE)
 
-    
+
     try:
         #Get the actual inner list of the hierarchy
         hierarchy = hierarchy[0]
-        
+
         #(Empty) List with walls and their center of mass coordinates
         center_mass = []
 
         #Calculating center of mass and drawing contours
         for i, c in enumerate(contours):
             current_hierarchy = hierarchy[i]
-            
+
             if current_hierarchy[3] < 0:
                 #Outermost parent components
                 M = cv2.moments(c)
@@ -74,8 +74,8 @@ def image_callback(img_msg):
                 center_mass.append((cx, cy))
                 cv_image = cv2.drawContours(cv_image, c, -1, (255,0,0), 2)
                 cv_image = cv2.circle(cv_image,(cx,cy), 4, (255,0,0), -1 )
-            
-            """    
+
+            """
             elif current_hierarchy[2] < 0:
                 #Innermost child components
                 cv_image = cv2.drawContours(cv_image, c, -1, (0,255,0), 2 )
@@ -85,7 +85,7 @@ def image_callback(img_msg):
         text_placement = (10,50)
         cv2.putText(cv_image,'STOP sign detected', text_placement, font, 2,color,1,cv2.LINE_AA)
         print(center_mass)
-    
+
     except TypeError:
         font = cv2.FONT_HERSHEY_SIMPLEX
         color = (0, 0 ,0)

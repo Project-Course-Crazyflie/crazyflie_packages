@@ -1,0 +1,15 @@
+<launch>
+
+	<arg name="world" default="tutorial_1"/>
+	<arg name="x" default="3"/>
+	<arg name="n" default="3"/>
+
+	<include file="$(find dd2419_simulation)/launch/simulation.launch">
+		<arg name="world_name" value="$(arg world)"/>
+	</include>
+
+	<node pkg="milestone1" type="navgoal" name="navgoal_publisher"/>
+	<node pkg="milestone1" type="demonstrate" name="demo" args="$(arg x) $(arg n)"/>
+	<node pkg="milestone1" type="stop_seg.py" name="stopsign_detector"/>
+
+</launch>

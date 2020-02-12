@@ -129,6 +129,23 @@ def main():
 				print('going to state 3')
 
 			elif part == 3:
+				"""
+				roll, pitch, yaw = euler_from_quaternion((curr_pos.pose.orientation.x,
+														curr_pos.pose.orientation.y,
+														curr_pos.pose.orientation.z,
+														curr_pos.pose.orientation.w))
+				if yaw < math.pi/2 and done_lap:
+					done_lap = False
+				if yaw > math.pi*3/2 and not done_lap:
+					if turns_done == nums[1]:
+						target = original_yaw + math.pi
+						send_goal([0,0,0,target - yaw])
+						part = 4
+
+					else:
+						done_lap = True
+						turns_done += 1
+				"""
 				roll, pitch, yaw = euler_from_quaternion((curr_pos.pose.orientation.x,
 														  curr_pos.pose.orientation.y,
 														  curr_pos.pose.orientation.z,
@@ -145,13 +162,14 @@ def main():
 
 						print('going to state 4')
 					else :
+						sleep(0.5)
 						part = 2
 				else:
 					part = 3
 
 			#now go back and float at the origin
 			elif part == 4:
-				rospy.sleep(3)
+				rospy.sleep(1)
 				send_goal([nums[0],0,0,0])
 				print('When I stop moving I\'m done\nExiting')
 
