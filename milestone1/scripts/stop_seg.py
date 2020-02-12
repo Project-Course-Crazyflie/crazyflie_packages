@@ -8,9 +8,9 @@ from std_msgs.msg import String
 import numpy as np
 import rospy
 
-mtx  = np.load('mtx.npy')
-dist = np.load('dist.npy')
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(640,480),1,(640,480))
+#mtx  = np.load('mtx.npy')
+#dist = np.load('dist.npy')
+#newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(640,480),1,(640,480))
 
 def image_callback(img_msg):
     #convert image from ROS format to CV
@@ -33,7 +33,7 @@ def image_callback(img_msg):
     upper0 = np.array([179, 255, 255])
 
     lower1 = np.array([0, 10, 30])
-    upper1 = np.array([5, 255, 255])
+    upper1 = np.array([8, 255, 255])
 
     # Threshold the HSV image to get only the pixels in ranage
     gray0 = cv2.inRange(hsv, lower0, upper0)
@@ -65,8 +65,8 @@ def image_callback(img_msg):
         #Calculating center of mass and drawing contours
         for i, c in enumerate(contours):
             current_hierarchy = hierarchy[i]
-            print(cv2.contourArea(c))
-            if current_hierarchy[3] < 0 and cv2.contourArea(c) >= 650 :
+            
+            if current_hierarchy[3] < 0 and cv2.contourArea(c) >= 5000 :
                 #Outermost parent components
                 M = cv2.moments(c)
                 cx = int(M['m10']/M['m00'])

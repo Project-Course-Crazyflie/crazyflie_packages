@@ -8,7 +8,7 @@
     </node> -->
     <node pkg="milestone1" type="navgoal" name="navgoal_publisher">
     </node>
-    <node pkg="milestone1" type="fc3.py" name="stop_sign_detection"> 
+    <node pkg="milestone1" type="stop_seg.py" name="stop_sign_detection"> 
     </node>
     
 
