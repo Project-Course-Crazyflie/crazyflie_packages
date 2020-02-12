@@ -156,7 +156,7 @@ def main():
 				print('When I stop moving I\'m done\nExiting')
 
 				x_diff = start_pose.pose.position.x-curr_pos.pose.position.x
-				y_diff = start_pose.pose.position.y-curr_pos.position.y
+				y_diff = start_pose.pose.position.y-curr_pos.pose.position.y
 				diff = math.sqrt(x_diff*x_diff + y_diff*y_diff)
 
 				print("Deviation: {} m".format(diff))
