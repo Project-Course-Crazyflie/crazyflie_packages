@@ -1,0 +1,15 @@
+<launch>
+
+	<arg name="drone_channel" default="84"/>
+	<arg name="x" default="3"/>
+	<arg name="n" default="3"/>
+
+	<include file="$(find dd2419_launch)/launch/base.launch">
+		<arg name="ch" value="$(arg drone_channel)"/>
+	<include/>
+
+	<node pkg="milestone1" type="navgoal" name="navgoal_publisher"/>
+	<node pkg="milestone1" type="demonstrate" name="demo" args="$(arg x) $(arg n)"/>
+
+
+</launch>

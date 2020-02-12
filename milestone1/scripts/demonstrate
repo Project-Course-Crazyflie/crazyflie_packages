@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import math
+from collections import deque
 import rospy
 import tf
 import tf2_geometry_msgs
@@ -62,20 +63,20 @@ def main():
 
 
 	rot_point = PoseStamped()
-	
+
 	rot_point.header.frame_id = 'cf1/base_link'
 	rot_point.pose.position.x = float(nums[0]) # x position to rotate at in base_link frame
 	rot_point.pose.position.y = 0
 	rot_point.pose.position.z = 0.5
 	rot_point.pose.orientation.w = 1
 	rot_point.header.stamp = rospy.Time.now()
-	stamp = rot_point.header.stamp
-	
+
 
 	while not tf_buf.can_transform('cf1/base_link','cf1/odom',rot_point.header.stamp,rospy.Duration(1.0)):
 		print('can not transform yet')
 	rot_point = tf_buf.transform(rot_point,'cf1/odom') #where the drone will rotate in the odom frame
 
+	pos_buf = deque()
 	part = -1
 	#turns_done = 0
 	#done_lap = False
@@ -85,7 +86,7 @@ def main():
 	rate = rospy.Rate(10)  # Hz
 	while not rospy.is_shutdown():
 		if curr_pos:
-			
+
 			#Make sure nto only post a message once, since they're in base_link frame
 			if wait_a_little == 10 * T:
 				send_goal([0,0,0.5,0])
@@ -94,7 +95,7 @@ def main():
 				if wait_a_little == 0:
 					start_pose = curr_pos
 					part = 0
-				
+
 
 			#go X meters forward
 			if part == 0:
@@ -103,12 +104,17 @@ def main():
 				part = 1
 				print('going to state 1')
 			elif part == 1:
-				dx = abs(curr_pos.pose.position.x - rot_point.pose.position.x)
-				dy = abs(curr_pos.pose.position.y - rot_point.pose.position.y)
+				if len(pos_buf) < 10:
+					pos_buf.append((curr_pos.pose.position.x,curr_pos.pose.position.y))
+				else:
+					xy0 = pos_buf.popleft()
+					pos_buf.append((curr_pos.pose.position.x,curr_pos.pose.position.y))
+					dx = abs(xy0[0] - pos_buf[-1][0])
+					dy = abs(xy0[1] - pos_buf[-1][1])
 
-				if math.sqrt(dx**2 + dy**2) < 0.09:
-					part = 2
-					print('going to state 2')
+					if math.sqrt(dx**2 + dy**2) < 0.09:
+						part = 2
+						print('going to state 2')
 
 			#spin n laps
 			elif part == 2:
@@ -117,7 +123,7 @@ def main():
 															   curr_pos.pose.orientation.y,
 															   curr_pos.pose.orientation.z,
 															   curr_pos.pose.orientation.w))
-				
+
 				send_goal([0, 0, 0, math.pi])
 				part = 3
 				print('going to state 3')
@@ -136,11 +142,11 @@ def main():
 					i += 1
 					if i==2*nums[1]+1:
 						part=4
-					
+
 						print('going to state 4')
 					else :
 						part = 2
-				else: 
+				else:
 					part = 3
 
 			#now go back and float at the origin
@@ -151,7 +157,7 @@ def main():
 
 				x_diff = start_pose.pose.position.x-curr_pos.pose.position.x
 				y_diff = start_pose.pose.position.y-curr_pos.position.y
-				diff = math.sqrt(x_diff*x_diff + y_diff*y_diff) 
+				diff = math.sqrt(x_diff*x_diff + y_diff*y_diff)
 
 				print("Deviation: {} m".format(diff))
 				return
