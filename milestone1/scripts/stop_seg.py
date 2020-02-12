@@ -8,9 +8,9 @@ from std_msgs.msg import String
 import numpy as np
 import rospy
 
-mtx  = np.load('mtx.npy')
-dist = np.load('dist.npy')
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(640,480),1,(640,480))
+#mtx  = np.load('mtx.npy')
+#dist = np.load('dist.npy')
+#newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(640,480),1,(640,480))
 
 def image_callback(img_msg):
     #convert image from ROS format to CV
@@ -65,8 +65,8 @@ def image_callback(img_msg):
         #Calculating center of mass and drawing contours
         for i, c in enumerate(contours):
             current_hierarchy = hierarchy[i]
-            
-            if current_hierarchy[3] < 0:
+            print(cv2.contourArea(c))            
+            if current_hierarchy[3] < 0 and cv2.contourArea(c) >= 650 :
                 #Outermost parent components
                 M = cv2.moments(c)
                 cx = int(M['m10']/M['m00'])
@@ -74,6 +74,7 @@ def image_callback(img_msg):
                 center_mass.append((cx, cy))
                 cv_image = cv2.drawContours(cv_image, c, -1, (255,0,0), 2)
                 cv_image = cv2.circle(cv_image,(cx,cy), 4, (255,0,0), -1 )
+    
             
             """    
             elif current_hierarchy[2] < 0:
