@@ -1,0 +1,120 @@
+#!/usr/bin/env python
+import numpy as np
+import cv2
+from cv_bridge import CvBridge, CvBridgeError
+import roslib
+import rospy
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+
+#https://pjreddie.com/darknet/yolo/
+
+def callback(img_msg):
+	bridge = CvBridge()
+
+	try:
+		image = bridge.imgmsg_to_cv2(img_msg, 'bgr8')
+		npim = np.array(image)
+	except CvBridgeError as e:
+		print(e)
+
+	(H, W) = image.shape[:2]
+	(SH, SW) = H/S, W/S
+
+
+	blob = cv2.dnn.blobFromImage(image)
+	darkNet.setInput(blob)
+	ln = darkNet.getLayerNames()
+	ln = [ln[i[0] - 1] for i in darkNet.getUnconnectedOutLayers()]
+	layerOutputs = darkNet.forward(ln)
+	#print('dump: ',darkNet.dump())
+	#print('returns: ',returns)
+
+	boxes = []
+	confidences = []
+	classIDs = []
+
+	# loop over each of the layer outputs
+	for output in layerOutputs:
+		# loop over each of the detections
+		for detection in output:
+			# extract the class ID and confidence (i.e., probability) of
+			# the current object detection
+			scores = detection[5:]
+			classID = np.argmax(scores)
+			conf = scores[classID]
+			# filter out weak predictions by ensuring the detected
+			# probability is greater than the minimum probability
+			if conf > confidence:
+				# scale the bounding box coordinates back relative to the
+				# size of the image, keeping in mind that YOLO actually
+				# returns the center (x, y)-coordinates of the bounding
+				# box followed by the boxes' width and height
+				box = detection[0:4] * np.array([W, H, W, H])
+				print(detection[0:4])
+				(centerX, centerY, width, height) = box.astype("int")
+				#if height > H or width > W:
+				#	continue
+				# use the center (x, y)-coordinates to derive the top and
+				# and left corner of the bounding box
+				x = int(centerX - (width / 2))
+				y = int(centerY - (height / 2))
+				# update our list of bounding box coordinates, confidences,
+				# and class IDs
+				boxes.append([x, y, int(width), int(height)])
+				confidences.append(float(conf))
+				classIDs.append(classID)
+	idxs = cv2.dnn.NMSBoxes(boxes, confidences, confidence, threshold)
+
+	if len(idxs) > 0:
+		# loop over the indexes we are keeping
+		for i in idxs.flatten():
+			# extract the bounding box coordinates
+			(x, y) = (boxes[i][0], boxes[i][1])
+			(w, h) = (boxes[i][2], boxes[i][3])
+			# draw a bounding box rectangle and label on the image
+			color = [int(c) for c in COLORS[classIDs[i]]]
+			#print('x:', x)
+			#print('y:', y)
+			#print('h:,', h)
+			#print('w:,', w)
+			cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
+			text = "{}: {:.4f}".format(LABELS[classIDs[i]], confidences[i])
+			cv2.putText(image, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,0.5, color, 2)
+	# show the output image
+	try:
+		#Convert back to ROS format from CV and publish to the topic /my
+		image_pub.publish(bridge.cv2_to_imgmsg(image, 'bgr8'))
+		print('published')
+	except CvBridgeError as e:
+		print(e)
+
+#	The image is divided into sections and the 4 numbers in detection[:4]
+#	are relative to the box that calculated them, NOT THE WHOLE IMAGE
+S = 3 #sqrt(n_squares the image is divided into)
+LABELS = open('coco.names').read().strip().split("\n")
+#print('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
+#print(LABELS)
+#print('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
+np.random.seed(42)
+COLORS = np.random.randint(0, 255, size=(len(LABELS), 3),dtype="uint8")
+#minimum probability to filter weak detections
+confidence = 0.5
+#threshold when applying non-maxima suppression
+threshold = 0.3
+
+cfgFile ='yolov3.cfg'
+darknetModel = 'yolov3.weights'
+darkNet = cv2.dnn.readNetFromDarknet(cfgFile, darknetModel)
+
+sub_pose = rospy.Subscriber('cf1/camera/image_raw', Image, callback)
+image_pub = rospy.Publisher('/myresult', Image, queue_size=10)
+rospy.init_node('yolo')
+
+def main():
+	rate = rospy.Rate(10) #Hz
+	while not rospy.is_shutdown():
+		rate.sleep()
+
+if __name__ == '__main__':
+	main()
