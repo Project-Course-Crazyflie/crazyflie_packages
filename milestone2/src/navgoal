@@ -13,17 +13,17 @@ goal = None
 
 def goal_callback(msg):
     global goal
-
+    """
     # RViz's "2D Nav Goal" publishes z=0, so add some altitude if needed.
     if msg.pose.position.z == 0.0:
         msg.pose.position.z = 0.4
-
+    """
     rospy.loginfo('New goal set:\n%s', msg)
     goal = msg
 
 def publish_cmd(goal):
     # Need to tell TF that the goal was just generated
-    goal.header.stamp = rospy.Time.now()
+    goal.header.stamp = rospy.Time(0)
 
     if not tf_buf.can_transform(goal.header.frame_id, 'cf1/odom', goal.header.stamp):
         rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % goal.header.frame_id)
