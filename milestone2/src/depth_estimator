@@ -1,0 +1,24 @@
+#!/usr/bin/env python
+#import numpy as np
+#import cv2
+#from cv_bridge import CvBridge, CvBridgeError
+import roslib
+import rospy
+from std_msgs.msg import Int32MultiArray
+
+def callback(msg):
+	pass
+
+def publish():
+	pass
+
+def main():
+	rospy.Subscriber('sign_box',Int32MultiArray,callback)
+	rospy.Publisher('sign_pose',posearray,queue_size=10)
+	rate = rospy.Rate(10) #Hz
+	while not rospy.is_shutdown():
+		rate.sleep()
+	return
+
+if __name__ == '__main__':
+	main()
