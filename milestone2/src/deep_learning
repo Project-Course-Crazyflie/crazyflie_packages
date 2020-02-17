@@ -12,6 +12,8 @@ from std_msgs.msg import Int32MultiArray, MultiArrayDimension
 image = None
 bridge = CvBridge()
 
+
+
 def callback(img_msg):
 	global image
 
@@ -77,6 +79,8 @@ def main():
 	rate = rospy.Rate(10) #Hz
 	while not rospy.is_shutdown():
 		if image.any() != None:
+			#undistort image
+
 			img = image
 			image = None
 
