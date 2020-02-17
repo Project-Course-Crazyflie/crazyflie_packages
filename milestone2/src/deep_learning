@@ -11,9 +11,7 @@ from std_msgs.msg import String
 
 image = None
 bridge = CvBridge()
-mtx  = np.load('mtx.npy')
-dist = np.load('dist.npy')
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(640,480),1,(640,480))
+
 
 
 def callback(img_msg):
@@ -65,9 +63,6 @@ def main():
 	while not rospy.is_shutdown():
 		if image.any() != None:
 			#undistort image
-			dst = cv2.undistort(image, mtx, dist, None, newcameramtx)
-			x,y,w,h = roi
-			image = dst[y:y+h, x:x+w]
 
 			img = image
 			image = None
