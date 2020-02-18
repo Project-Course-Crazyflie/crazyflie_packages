@@ -5,7 +5,7 @@
 import roslib
 import rospy
 from std_msgs.msg import Int32MultiArray
-from geometry_msgs.msg import PoseArray, Pose
+from geometry_msgs.msg import PoseArray, Pose, PoseWithCovariance
 from aruco_msgs.msg import MarkerArray, Marker
 
 
@@ -13,7 +13,7 @@ from aruco_msgs.msg import MarkerArray, Marker
 #read about PoseArray:
 #http://docs.ros.org/melodic/api/geometry_msgs/html/msg/PoseArray.html
 
-boxes_msg = []
+boxes_msg = None
 
 def callback(msg):
 	global boxes_msg
@@ -23,35 +23,42 @@ def callback(msg):
 def publish(msg):
 
 	pose_pub.publish(msg)
-
+	print("published")
 	return
 
+rospy.init_node("object_poser")
 box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
-pose_pub = rospy.Publisher('sign_pose', PoseArray, queue_size=1)
+pose_pub = rospy.Publisher('sign_pose', MarkerArray, queue_size=10)
 
 def main():
 	global boxes
-	rate = rospy.Rate(3) #Hz
+	rate = rospy.Rate(5) #Hz
 	while not rospy.is_shutdown():
-		if len(boxes_msg):
+		if boxes_msg:
 			boxes = boxes_msg
-			boxes_mgs = []
+			boxes_mgs = None
 			#find the depth of found object(s)
 						
 
 			#calculate the complete pose of the object(s)
 			markers = []
-			for b in boxes.data:
+			for i in range(boxes.layout.dim[0].size):
 				m = Marker()
+				
+				p = PoseWithCovariance()
 				m.header.frame_id = "cf1/camera_link"
 				m.header.stamp = rospy.Time.now()
-				m.pose.position.x = b[0]
-				m.pose.position.y = b[1]
-				m.pose.position.z = (680-b[3])*1/340  #adjust function
+				p.pose.position.x = boxes.data[4*i]
+				p.pose.position.y = boxes.data[4*i+1]
+				p.pose.position.z = (680-boxes.data[4*i+3])*1./340  #adjust function
+				print(boxes.data[4*i+3])
+				m.pose = p
 				markers.append(m)
 			
 			pose_marker = MarkerArray()
-			pose_marker = [Marker() for i in markers]
+			pose_marker.header.frame_id = "cf1/camera_link"
+			pose_marker.header.stamp = rospy.Time.now()
+			pose_marker.markers = markers  #[Marker() for i in markers]
 			#publish()
 			publish(pose_marker)
 		rate.sleep()

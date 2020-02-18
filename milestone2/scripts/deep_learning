@@ -122,7 +122,7 @@ def main():
 						# update our list of bounding box coordinates, confidences,
 						# and class IDs
 						boxes.append([x, y, int(width), int(height)])
-						cboxes.append([centerX, centerY, width, height])
+						cboxes.extend([centerX, centerY, width, height])
 						confidences.append(float(conf))
 						classIDs.append(classID)
 
