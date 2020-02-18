@@ -9,18 +9,22 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import TransformStamped, Vector3
 from crazyflie_driver.msg import Position
+from Marker import MarkerArray
 
 
 class MapOdomUpdate:
     def __init__(self):
         # TODO: import MarkerArray
-        self.aruco_detect_sub = rospy.Subscriber('/aruco/markers', MarkerArray, update_callback)
+        self.aruco_detect_sub = rospy.Subscriber('/aruco/markers', MarkerArray, self.update_callback)
         self.old_msg = None
 
         self.tf_buf = tf2_ros.Buffer()
         self.tf_lstn = tf2_ros.TransformListener(self.tf_buf)
 
         self.broadcaster = tf2_ros.TransformBroadcaster()
+        t = TransformStamped()
+        
+        self.tf_buf.broadcast()
 
     def update_callback(self, m_array):
         if m_array == self.old_msg:
@@ -47,4 +51,4 @@ class MapOdomUpdate:
         
 if __name__ == '__main__':
     rospy.init_node('map_to_odom')
-    main()
+    p = MapOdomUpdate()

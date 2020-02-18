@@ -1,15 +1,20 @@
 <launch>
 	
+
+    <arg name="world_name" default="simple_map"/>
 	
-    <!--<include file="$(find dd2419_simulation)/launch/aruco.launch"/>-->
+    <include file="$(find dd2419_simulation)/launch/aruco.launch"/>
     <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_cam_trans" args="0.01 0 0.02 -1.57 0 -1.57 cf1/base_link cf1/camera_link">
     </node> 
-    <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom_trans" args="0.5 0.5 0 0 0 0 map cf1/odom">
-    </node>
+    <!--<node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom_trans" args="0 0 0 0 0 0 map cf1/odom">
+    </node> -->
     <node pkg="milestone2" type="navgoal" name="navgoal_publisher">
     </node>
     <node pkg="flight_camp" type="aruco_detection" name="aruco_detection"> 
     </node>
+    <node pkg="milestone2" type="displaymapmarkers.py" name="map_markers">
+        <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
+    </node>    
     <!--node pkg="milestone2" type="aruco_follower" name="aruco_follower"> 
     </node> -->
     

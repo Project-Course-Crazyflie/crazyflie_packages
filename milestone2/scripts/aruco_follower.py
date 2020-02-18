@@ -165,33 +165,12 @@ class ArucoFollower:
         """
         
         self.follower_pub.publish(goal_aruco)
- 
-def main():
-    rate = rospy.Rate(10)
-    while not rospy.is_shutdown():
-        inp = raw_input("Aruco marker to follow: ")
-        goal = PoseStamped()
-        goal.header.frame_id = "aruco/detected" + inp
-        
-        goal.pose.position.y = 1.0
-
-        q = quaternion_from_euler(math.pi, 0, math.pi/2)
-        print(q)
-
-        goal.pose.orientation.x = q[0] 
-        goal.pose.orientation.y = -q[1]
-        goal.pose.orientation.z = q[2]
-        goal.pose.orientation.w = q[3]   
-
-        follower_pub.publish(goal)
-        rate.sleep()
 
 if __name__ == '__main__':
     rospy.init_node('aruco_follower')
-    #main()
     follower = ArucoFollower()
     while not rospy.is_shutdown():
         aruco_id = inp = raw_input("Aruco marker to follow: ")
-        follower.follow(aruco_id)
+        follower.follow_map(aruco_id)
     
     
