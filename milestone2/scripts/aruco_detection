@@ -20,7 +20,7 @@ last_msg = None
 
 def transform_from_marker(m):
     t = TransformStamped()
-    t.header.stamp = rospy.Time.now()
+    t.header.stamp = rospy.Time(0)
     t.header.frame_id = 'cf1/camera_link'
     t.child_frame_id = 'aruco/detected' + str(m.id)
     t.transform.translation = Vector3(*[m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z])

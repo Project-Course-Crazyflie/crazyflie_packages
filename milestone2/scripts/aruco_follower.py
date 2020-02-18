@@ -121,10 +121,10 @@ class ArucoFollower:
         aruco_pose = PoseStamped()
         
         aruco_pose.header.frame_id = aruco_frame
-        aruco_pose.header.stamp = rospy.Time(0)
+        aruco_pose.header.stamp = rospy.Time.now()
         
         p0 = self.tf_buf.transform(aruco_pose, 'map')
-        aruco_pose.pose.position.y = 0.5
+        aruco_pose.pose.position.y = 1
         p1 = self.tf_buf.transform(aruco_pose, 'map')
         
         
@@ -134,17 +134,17 @@ class ArucoFollower:
         q = self.yaw_towards_frame(self.cf1_pose, target_frame=aruco_frame, T=None)
         
         
-        goal_odom = PoseStamped()
-        goal_odom.header.frame_id = "map"
-        goal_odom.pose.position.x = p1.pose.position.x
-        goal_odom.pose.position.y = p1.pose.position.y
-        goal_odom.pose.position.z = p1.pose.position.z # use p0 here to keep the crazyflie on the same height as the aruco marker
-        goal_odom.pose.orientation.x = q[0] 
-        goal_odom.pose.orientation.y = q[1]
-        goal_odom.pose.orientation.z = q[2]
-        goal_odom.pose.orientation.w = q[3]
+        goal_map = PoseStamped()
+        goal_map.header.frame_id = "map"
+        goal_map.pose.position.x = p1.pose.position.x
+        goal_map.pose.position.y = p1.pose.position.y
+        goal_map.pose.position.z = p1.pose.position.z # use p0 here to keep the crazyflie on the same height as the aruco marker
+        goal_map.pose.orientation.x = q[0] 
+        goal_map.pose.orientation.y = q[1]
+        goal_map.pose.orientation.z = q[2]
+        goal_map.pose.orientation.w = q[3]
         
-        goal_aruco = self.tf_buf.transform(goal_odom, aruco_frame)
+        goal_aruco = self.tf_buf.transform(goal_map, aruco_frame)
         
         
         """
