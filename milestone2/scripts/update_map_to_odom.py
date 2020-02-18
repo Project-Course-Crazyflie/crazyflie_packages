@@ -22,9 +22,11 @@ class MapOdomUpdate:
         self.tf_lstn = tf2_ros.TransformListener(self.tf_buf)
 
         self.broadcaster = tf2_ros.TransformBroadcaster()
+       
         t = TransformStamped()
-        
-        self.tf_buf.broadcast()
+        t.frame_id = "map"
+        t.child_frame_id = "cf1/odom"
+        self.tf_buf.broadcast(t)
 
     def update_callback(self, m_array):
         if m_array == self.old_msg:

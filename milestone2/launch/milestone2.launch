@@ -8,6 +8,8 @@
     </node> 
     <!--<node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom_trans" args="0 0 0 0 0 0 map cf1/odom">
     </node> -->
+    <node pkg="milestone2" type="update_map_to_odom.py" name="map_to_odom_publisher">
+    </node>
     <node pkg="milestone2" type="navgoal" name="navgoal_publisher">
     </node>
     <node pkg="flight_camp" type="aruco_detection" name="aruco_detection"> 
