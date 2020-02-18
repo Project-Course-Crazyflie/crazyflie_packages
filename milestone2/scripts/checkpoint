@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+#import numpy as np
+#import cv2
+#from cv_bridge import CvBridge, CvBridgeError
+import roslib
+import rospy
+from std_msgs.msg import Bool
+from geometry_msgs.msg import PoseStamped
+
+#def yaw_towards_frame(cf1_pose, target_frame, transform) returns list of quaternion point in frame cf1/odom
+
+rotate_to = None
+curr_pose = None
+
+def check_callback(msg):
+	global rotate_to
+	rotate_to = msg
+	return
+
+def pose_callback(msg):
+	global curr_pose
+	curr_pose = msg
+	return
+
+def done_publish():
+	msg = Bool()
+	msg.data = True
+	pose_pub.publish(msg)
+	return
+
+check_sub = rospy.Subscriber('check_point', PoseStamped, check_callback)
+done_pub = rospy.Publisher('check_done', Bool, queue_size=10)
+
+pose_pub = rospy.Publisher('move_to', PoseStamped, queue_size=10)
+pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
+
+tf_buf   = tf2_ros.Buffer()
+
+
+def main():
+	global curr_pose
+
+	rate = rospy.Rate(10) #Hz
+	while not rospy.is_shutdown():
+		if rotate_to and curr_pose:
+			rot_to = rotate_to
+			rotate_to = None
+			#rotate
+			rotate = PoseStamped()
+			rotate.header.frame_id = '/cf1/base_link'
+			if not tf_buf.can_transform('/cf1/odom', '/cf1/base_link', rot_to.header.stamp):
+				#roserror thing
+				continue
+			transform = tf_buf.lookup_transform('/cf1/odom', rot_to, rospy.Time())
+
+			quats = yaw_towards_frame(curr_pose, rot_to, transform)
+
+			
+			rotate.header.stamp = rospy.Time.now()
+			rotate.pose.orientation.
+
+
+
+			done_publish()
+		rate.sleep()
+	return
+
+if __name__ == '__main__':
+	main()

@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+#import numpy as np
+#import cv2
+#from cv_bridge import CvBridge, CvBridgeError
+import roslib
+import rospy
+from std_msgs.msg import Int32MultiArray
+from geometry_msgs.msg import PoseArray, Pose
+#read about PoseArray:
+#http://docs.ros.org/melodic/api/geometry_msgs/html/msg/PoseArray.html
+
+boxes_msg = []
+
+def callback(msg):
+	global boxes_msg
+	boxes_msg = msg
+	return
+
+def publish(poses):
+	msg = PoseArray()
+	msg.poses = [Pose() for i in poses]
+	for pose in msg.poses:
+		pass
+	pose_pub.publish(msg)
+	return
+
+def main():
+	box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
+	pose_pub = rospy.Publisher('sign_pose', PoseArray, queue_size=1)
+
+
+	global boxes
+	rate = rospy.Rate(3) #Hz
+	while not rospy.is_shutdown():
+		if len(boxes_msg):
+			boxes = boxes_msg
+			boxes_mgs = []
+			#find the depth of found object(s)
+
+			#calculate the complete pose of the object(s)
+
+			#transform to map frame
+			#publish()
+			pass
+		rate.sleep()
+	return
+
+if __name__ == '__main__':
+	main()

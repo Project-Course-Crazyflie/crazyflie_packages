@@ -13,29 +13,8 @@ from geometry_msgs.msg import TransformStamped, Vector3
 from crazyflie_driver.msg import Position
 
 
-def yaw_towards_frame(cf1_pose, target_frame, T=None):
-    """Return the yaw towards frame represented in a quaternion (list)
-    """
-    # TODO: send in transform T as argument instead of calculating here
-    if not tf_buf.can_transform(target_frame, 'cf1/odom', rospy.Time(0)):
-        rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % target_frame)
-        return
-        
-    frame_pose = PoseStamped() # [0, 0, 0]
-    frame_pose.header.stamp = rospy.Time(0)
-    frame_pose.header.frame_id = target_frame
-    
-    p = tf_buf.transform(frame_pose, 'cf1/odom')
-    
-    frame_pos = np.array([p.pose.position.x, p.pose.position.y, p.pose.position.z])
-    curr = np.array([cf1_pose.pose.position.x, cf1_pose.pose.position.y, cf1_pose.pose.position.z])
-                
-    diff = frame_pos-curr
-    theta = np.arctan2(diff[1], diff[0])
-    
-    q_rot = quaternion_from_euler(0, 0, theta,"sxyz")
-    
-    return q_rot
+
+
     
 
 class ArucoFollower:
@@ -46,19 +25,42 @@ class ArucoFollower:
         self.cf1_pose = None
 
         self.tf_buf = tf2_ros.Buffer()
-        tf_lstn = tf2_ros.TransformListener(tf_buf)
+        tf_lstn = tf2_ros.TransformListener(self.tf_buf)
 
 
     def cf1_pose_callback(self, pose):
-        self.cf1_pose_top = pose
-    
+        self.cf1_pose = pose
+        
+    def yaw_towards_frame(self, cf1_pose, target_frame, T=None):
+        """Return the yaw towards frame represented in a quaternion (list)
+        """
+        # TODO: send in transform T as argument instead of calculating here
+        if not self.tf_buf.can_transform(target_frame, 'cf1/odom', rospy.Time(0)):
+            rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % target_frame)
+            return
+            
+        frame_pose = PoseStamped() # [0, 0, 0]
+        frame_pose.header.stamp = rospy.Time(0)
+        frame_pose.header.frame_id = target_frame
+        
+        p = self.tf_buf.transform(frame_pose, 'cf1/odom')
+        
+        frame_pos = np.array([p.pose.position.x, p.pose.position.y, p.pose.position.z])
+        curr = np.array([cf1_pose.pose.position.x, cf1_pose.pose.position.y, cf1_pose.pose.position.z])
+                    
+        diff = frame_pos-curr
+        theta = np.arctan2(diff[1], diff[0])
+        
+        q_rot = quaternion_from_euler(0, 0, theta,"sxyz")
+        
+        return q_rot
 
     def follow(self, aruco_id):
         aruco_frame = "aruco/detected" + str(aruco_id)
 
         while not self.cf1_pose: rospy.loginfo("Waiting for cf1/pose...")
 
-        if not tf_buf.can_transform(aruco_frame, 'cf1/odom', rospy.Time(0)):
+        if not self.tf_buf.can_transform(aruco_frame, 'cf1/odom', rospy.Time(0)):
             rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % aruco_frame)
             return
         
@@ -70,14 +72,14 @@ class ArucoFollower:
         aruco_pose.header.stamp = rospy.Time(0)
         
         p0 = self.tf_buf.transform(aruco_pose, 'cf1/odom')
-        aruco_pose.pose.position.y = 1
+        aruco_pose.pose.position.y = 0.5
         p1 = self.tf_buf.transform(aruco_pose, 'cf1/odom')
         
         
         goal = PoseStamped()
         goal.header.frame_id = aruco_frame
         
-        q = yaw_towards_frame(self.cf1_pose, target_frame=aruco_frame, T=None)
+        q = self.yaw_towards_frame(self.cf1_pose, target_frame=aruco_frame, T=None)
         
         
         goal_odom = PoseStamped()
