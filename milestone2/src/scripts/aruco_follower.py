@@ -131,4 +131,10 @@ def main():
 
 if __name__ == '__main__':
     rospy.init_node('aruco_follower')
-    main()
+    #main()
+    follower = ArucoFollower()
+    while not rospy.is_shutdown():
+        aruco_id = inp = raw_input("Aruco marker to follow: ")
+        follower.follow(aruco_id)
+    
+    
