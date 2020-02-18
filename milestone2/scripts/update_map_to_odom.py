@@ -18,7 +18,7 @@ class MapOdomUpdate:
         self.old_msg = None
 
         self.tf_buf = tf2_ros.Buffer()
-        self.tf_lstn = tf2_ros.TransformListener(tf_buf)
+        self.tf_lstn = tf2_ros.TransformListener(self.tf_buf)
 
         self.broadcaster = tf2_ros.TransformBroadcaster()
 
@@ -33,14 +33,15 @@ class MapOdomUpdate:
         frame_detected = "aruco/detected" + str(m.id)
         frame_map = "aruco/marker" + str(m.id)
         
-        if not tf_buf.can_transform(frame_detected, frame_map, rospy.Time(0)):
-            rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % frame)
+        if not self.tf_buf.can_transform(frame_detected, frame_map, rospy.Time(0)):
+            rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % frame_map)
             return
         
-        transform = self.tf_lstn.lookupTransform(frame_map, frame_detected,  rospy.Time(0))
+        transform = self.tf_buf.lookupTransform(frame_map, frame_detected, rospy.Time(0))
         # TODO: outlier detection
         transform.frame_id = "map"
         transform.child_frame_id = "cf1/odom"
+        transform.stamp = rospy.Time(0)
         self.tf_buf.broadcast(transform)
         
         
