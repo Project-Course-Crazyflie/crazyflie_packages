@@ -102,9 +102,7 @@ def main():
 			confidences = []
 			classIDs = []
 
-			# loop over each of the layer outputs
-			for output in layerOutputs:
-				# loop over each of the detections
+			# loop over each o, 'Do you like Python?', 'Of course')ch of the detections
 				for detection in output:
 					# extract the class ID and confidence (i.e., probability) of
 					# the current object detection
@@ -148,7 +146,7 @@ def main():
 
 			if len(boxes):
 				img_publish(img)
-				box_publish(*cboxes)
+				box_publish(cboxes)
 		rate.sleep()
 
 if __name__ == '__main__':
