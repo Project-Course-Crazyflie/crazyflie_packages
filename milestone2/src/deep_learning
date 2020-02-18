@@ -8,11 +8,11 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Int32MultiArray, MultiArrayDimension
 
 #https://pjreddie.com/darknet/yolo/
+#get weights: wget https://pjreddie.com/media/files/yolov3.weights
+#get tiny weights: wget https://pjreddie.com/media/files/yolov3-tiny.weights
 
 image = None
 bridge = CvBridge()
-
-
 
 def callback(img_msg):
 	global image
@@ -76,11 +76,9 @@ rospy.init_node('yolo')
 def main():
 	global image
 
-	rate = rospy.Rate(10) #Hz
+	rate = rospy.Rate(3) #Hz
 	while not rospy.is_shutdown():
-		if image.any() != None:
-			#undistort image
-
+		if len(image):
 			img = image
 			image = None
 
