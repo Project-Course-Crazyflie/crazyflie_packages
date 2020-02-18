@@ -11,6 +11,7 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import TransformStamped, Vector3
 from crazyflie_driver.msg import Position
+from aruco_msgs.msg import MarkerArray
 
 # Current goal (global state)
 goal = None
