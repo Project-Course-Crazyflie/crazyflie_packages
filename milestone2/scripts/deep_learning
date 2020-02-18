@@ -79,11 +79,6 @@ def main():
 	rate = rospy.Rate(3) #Hz
 	while not rospy.is_shutdown():
 		if len(image):
-<<<<<<< HEAD:milestone2/src/deep_learning
-=======
-			#undistort image
-
->>>>>>> 2801593546c2f0f62e5eff4cca1b2f90658802bb:milestone2/deep_learning
 			img = image
 			image = None
 
@@ -148,7 +143,7 @@ def main():
 
 			if len(boxes):
 				img_publish(img)
-				box_publish(*cboxes)
+				box_publish(cboxes)
 		rate.sleep()
 
 if __name__ == '__main__':
