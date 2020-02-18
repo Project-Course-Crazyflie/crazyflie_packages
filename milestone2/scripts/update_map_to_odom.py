@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import math
 import numpy as np
 import rospy
@@ -9,7 +11,7 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import TransformStamped, Vector3
 from crazyflie_driver.msg import Position
-from Marker import MarkerArray
+from aruco_msgs.msg import MarkerArray
 
 
 class MapOdomUpdate:
@@ -17,16 +19,27 @@ class MapOdomUpdate:
         # TODO: import MarkerArray
         self.aruco_detect_sub = rospy.Subscriber('/aruco/markers', MarkerArray, self.update_callback)
         self.old_msg = None
+        self.last_transform = None
 
         self.tf_buf = tf2_ros.Buffer()
         self.tf_lstn = tf2_ros.TransformListener(self.tf_buf)
 
         self.broadcaster = tf2_ros.TransformBroadcaster()
        
-        t = TransformStamped()
-        t.frame_id = "map"
-        t.child_frame_id = "cf1/odom"
-        self.tf_buf.broadcast(t)
+    
+    def spin(self):
+        rate = rospy.Rate(20)
+        while not rospy.is_shutdown():
+            if self.last_transform == None:
+                t = TransformStamped()
+                t.header.stamp = rospy.Time(0)
+                t.header.frame_id = "map"
+                t.child_frame_id = "cf1/odom"
+                t.transform.rotation.w = 1.0
+                self.broadcaster.sendTransform(t)
+            else:
+                self.broadcaster.sendTransform(self.last_transform)
+            rate.sleep()
 
     def update_callback(self, m_array):
         if m_array == self.old_msg:
@@ -45,12 +58,13 @@ class MapOdomUpdate:
         
         transform = self.tf_buf.lookupTransform(frame_map, frame_detected, rospy.Time(0))
         # TODO: outlier detection
-        transform.frame_id = "map"
+        transform.header.frame_id = "map"
         transform.child_frame_id = "cf1/odom"
-        transform.stamp = rospy.Time(0)
-        self.tf_buf.broadcast(transform)
+        transform.header.stamp = rospy.Time(0)
+        self.last_transform = transform
         
         
 if __name__ == '__main__':
     rospy.init_node('map_to_odom')
     p = MapOdomUpdate()
+    p.spin()
