@@ -63,15 +63,15 @@ class ArucoFollower:
             return
         
         # TODO: look up transform instead of using .transform multiple times
-        #(trans, rot) = listener.lookupTransform(aruco_frame, 'cf1/odom',  rospy.Time(0))
+        #(trans, rot) = self.tf_lstn.lookupTransform(aruco_frame, 'cf1/odom',  rospy.Time(0))
         aruco_pose = PoseStamped()
         
         aruco_pose.header.frame_id = aruco_frame
         aruco_pose.header.stamp = rospy.Time(0)
         
-        p0 = tf_buf.transform(aruco_pose, 'cf1/odom')
+        p0 = self.tf_buf.transform(aruco_pose, 'cf1/odom')
         aruco_pose.pose.position.y = 1
-        p1 = tf_buf.transform(aruco_pose, 'cf1/odom')
+        p1 = self.tf_buf.transform(aruco_pose, 'cf1/odom')
         
         
         goal = PoseStamped()
@@ -90,7 +90,7 @@ class ArucoFollower:
         goal_odom.pose.orientation.z = q[2]
         goal_odom.pose.orientation.w = q[3]
         
-        goal_aruco = tf_buf.transform(goal_odom, aruco_frame)
+        goal_aruco = self.tf_buf.transform(goal_odom, aruco_frame)
         
         
         """
