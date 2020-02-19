@@ -11,18 +11,12 @@ from std_msgs.msg import Int32MultiArray, MultiArrayDimension
 #get weights: wget https://pjreddie.com/media/files/yolov3.weights
 #get tiny weights: wget https://pjreddie.com/media/files/yolov3-tiny.weights
 
-image = None
+image_msg = None
 bridge = CvBridge()
 
-def callback(img_msg):
-	global image
-
-	try:
-		image = bridge.imgmsg_to_cv2(img_msg, 'bgr8')
-		npim = np.array(image)
-	except CvBridgeError as e:
-		print(e)
-	return
+def callback(msg):
+	global image_msg
+	image_msg = msg
 
 def img_publish(img):
 	try:
@@ -36,21 +30,19 @@ def img_publish(img):
 def box_publish(boxes):
 	msg = Int32MultiArray()
 	msg.layout.dim = [MultiArrayDimension(),MultiArrayDimension()]
-
+	n = 6
 	msg.layout.dim[0].label  = "n_boxes"
-	msg.layout.dim[0].size   = len(boxes)/4
+	msg.layout.dim[0].size   = len(boxes)/n
 	msg.layout.dim[0].stride = len(boxes)
 	msg.layout.dim[1].label  = "nums"
-	msg.layout.dim[1].size   = 4
-	msg.layout.dim[1].stride = 4
+	msg.layout.dim[1].size   = n
+	msg.layout.dim[1].stride = n
 	msg.layout.data_offset = 0
 
 	msg.data = boxes
 	box_pub.publish(msg)
 	return
 
-#	The image is divided into sections and the 4 numbers in detection[:4]
-#	are relative to the box that calculated them, NOT THE WHOLE IMAGE
 
 LABELS = open('coco.names').read().strip().split("\n")
 
@@ -62,8 +54,8 @@ confidence = 0.7
 #threshold when applying non-maxima suppression
 threshold = 0.3
 
-cfgFile ='yolov3-tiny.cfg'
-darknetModel = 'yolov3-tiny.weights'
+cfgFile ='yolov3.cfg'
+darknetModel = 'yolov3.weights'
 darkNet = cv2.dnn.readNetFromDarknet(cfgFile, darknetModel)
 darkNet.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
 darkNet.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
@@ -74,15 +66,24 @@ box_pub = rospy.Publisher('/sign_box', Int32MultiArray, queue_size=1)
 rospy.init_node('yolo')
 
 def main():
-	global image
+	global image_msg
 
 	rate = rospy.Rate(3) #Hz
 	while not rospy.is_shutdown():
-		if len(image):
-			img = image
-			image = None
+		if image_msg:
+			try:
+				img = bridge.imgmsg_to_cv2(image_msg, 'bgr8')
+				npim = np.array(img)
+			except CvBridgeError as e:
+				print(e)
+			stamp = image_msg.header.stamp.secs
+			stamp_ns = image_msg.header.stamp.nsecs
+
+
+			image_msg = None
 
 			(H, W) = img.shape[:2]
+			
 
 			blob = cv2.dnn.blobFromImage(img,1./255)
 			darkNet.setInput(blob)
@@ -122,7 +123,7 @@ def main():
 						# update our list of bounding box coordinates, confidences,
 						# and class IDs
 						boxes.append([x, y, int(width), int(height)])
-						cboxes.extend([centerX, centerY, width, height])
+						cboxes.extend([centerX, centerY, classID, height, stamp, stamp_ns])
 						confidences.append(float(conf))
 						classIDs.append(classID)
 
