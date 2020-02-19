@@ -23,7 +23,7 @@ class MapOdomUpdate:
         self.last_transform = None
 
         self.tf_buf = tf2_ros.Buffer()
-        self.tf_lstn = tf2_ros.TransformListener(self.tf_buf)
+        self.tf_lstn = tf2_ros.TransformListener(self.tf_buf, queue_size=100)
 
         self.broadcaster = tf2_ros.TransformBroadcaster()
        
@@ -40,7 +40,7 @@ class MapOdomUpdate:
                 self.broadcaster.sendTransform(t)
                 #rospy.loginfo("Sending 0 between map and cf1/odom")
             else:
-                rospy.loginfo("Sending new transform between map and cf1/odom")
+                
                 self.last_transform.header.stamp = rospy.Time.now()
                 self.broadcaster.sendTransform(self.last_transform)
             rate.sleep()
@@ -63,16 +63,51 @@ class MapOdomUpdate:
 
         # TODO: dont do transform in callback?
         try:
-            transform = self.tf_buf.lookup_transform(frame_detected, frame_map, rospy.Time(0))
+            map_to_detected = self.tf_buf.lookup_transform(frame_map, frame_detected, rospy.Time(0))
+            map_to_odom = self.tf_buf.lookup_transform("cf1/odom", "map", rospy.Time(0))
         except:
             rospy.loginfo("Transform no longer exists")
+            #self.last_transform.header.stamp = rospy.Time.now()
+            #self.broadcaster.sendTransform(self.last_transform)
             return
         # TODO: outlier detection
-        transform.header.frame_id = "map"
-        transform.child_frame_id = "cf1/odom"
-        #transform.header.stamp = rospy.Time.now()
-        self.last_transform = transform
+        map_to_detected = self.kalman_filter(map_to_detected)
+        map_to_detected.header.frame_id = "map"
+        map_to_detected.child_frame_id = "map_new"
+        map_to_detected.header.stamp = rospy.Time.now()
+        self.broadcaster.sendTransform(map_to_detected)
+
+
+        map_to_odom = self.tf_buf.lookup_transform("map_new", "cf1/odom", rospy.Time(0))
+
+        map_to_odom.header.frame_id = "map"
+        map_to_odom.child_frame_id = "cf1/odom"
+        map_to_odom.header.stamp = rospy.Time.now()
+        rospy.loginfo("Created new transform between map and cf1/odom")
+        self.last_transform = map_to_odom
         
+    def kalman_filter(self, transform):
+        K = 0.2
+        #K = 1
+        t = transform
+        t.transform.translation.x = K*t.transform.translation.x
+        t.transform.translation.y = K*t.transform.translation.y
+        t.transform.translation.z = K*t.transform.translation.z
+
+        K_rot = 0.1
+        #K_rot = 1
+        q = [t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w]
+        a1, a2, a3 = euler_from_quaternion(q)
+        a1 = K_rot*a1
+        a2 = K_rot*a2
+        a3 = K_rot*a3
+        q_new = quaternion_from_euler(a1, a2, a3)
+        t.transform.rotation.x = q_new[0]
+        t.transform.rotation.y = q_new[1]
+        t.transform.rotation.z = q_new[2]
+        t.transform.rotation.w = q_new[3]
+
+        return t
         
 if __name__ == '__main__':
     rospy.init_node('map_to_odom')
