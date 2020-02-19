@@ -57,9 +57,9 @@ class MapOdomUpdate:
         frame_map = "aruco/marker" + str(m.id)
         
         #self.tf_buf.waitForTransform(frame_map, frame_detected, rospy.Time(0), rospy.Duration(3.0))
-        #if not self.tf_buf.can_transform(frame_map, frame_detected, rospy.Time(), rospy.Duration):
-        #    rospy.logwarn_throttle(5.0, 'No transform from {} to {}'.format(frame_map, frame_detected))
-        #    return
+        if not self.tf_buf.can_transform(frame_map, frame_detected, rospy.Time(0)):
+            rospy.logwarn_throttle(5.0, 'No transform from {} to {}'.format(frame_map, frame_detected))
+            return
 
         # TODO: dont do transform in callback?
         try:

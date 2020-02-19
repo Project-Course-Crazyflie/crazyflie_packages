@@ -75,7 +75,7 @@ class ArucoFollower:
         goal = PoseStamped()
         goal.header.frame_id = aruco_frame
         
-        q = self.yaw_towards_frame(self.cf1_pose, target_frame=aruco_frame, T=None)
+        q = self.yaw_towards_frame(p1, target_frame=aruco_frame, T=None)
         
         
         goal_odom = PoseStamped()
@@ -131,7 +131,7 @@ class ArucoFollower:
         goal = PoseStamped()
         goal.header.frame_id = aruco_frame
         
-        q = self.yaw_towards_frame(self.cf1_pose, target_frame=aruco_frame, T=None)
+        q = self.yaw_towards_frame(p1, target_frame=aruco_frame, T=None)
         
         
         goal_map = PoseStamped()
