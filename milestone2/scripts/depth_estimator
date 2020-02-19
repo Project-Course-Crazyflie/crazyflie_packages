@@ -30,6 +30,10 @@ rospy.init_node("object_poser")
 box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
 pose_pub = rospy.Publisher('sign_pose', MarkerArray, queue_size=10)
 
+fy = 220.72391163
+fx = 221.88078347
+real_size = 0.2
+
 def main():
 	global boxes
 	rate = rospy.Rate(5) #Hz
@@ -48,9 +52,10 @@ def main():
 				p = PoseWithCovariance()
 				m.header.frame_id = "cf1/camera_link"
 				m.header.stamp = rospy.Time.now()
-				p.pose.position.x = boxes.data[4*i]
-				p.pose.position.y = boxes.data[4*i+1]
-				p.pose.position.z = (680-boxes.data[4*i+3])*1./340  #adjust function
+				
+				p.pose.position.z = fy*real_size/(boxes.data[4*i+3])  #adjust function
+				p.pose.position.x = boxes.data[4*i]*p.pose.position.z/fx
+				p.pose.position.y = boxes.data[4*i+1]*p.pose.position.z/fy
 				print(boxes.data[4*i+3])
 				m.pose = p
 				markers.append(m)
