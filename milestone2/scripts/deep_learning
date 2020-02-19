@@ -54,8 +54,8 @@ confidence = 0.7
 #threshold when applying non-maxima suppression
 threshold = 0.3
 
-cfgFile ='yolov3.cfg'
-darknetModel = 'yolov3.weights'
+cfgFile ='yolov3-tiny.cfg'
+darknetModel = 'yolov3-tiny.weights'
 darkNet = cv2.dnn.readNetFromDarknet(cfgFile, darknetModel)
 darkNet.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
 darkNet.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)

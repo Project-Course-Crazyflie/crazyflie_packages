@@ -19,7 +19,7 @@ def callback(msg):
 def publish(msg):
 
 	pose_pub.publish(msg)
-	print("published")
+
 	return
 
 rospy.init_node("object_poser")
