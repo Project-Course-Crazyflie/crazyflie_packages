@@ -49,8 +49,8 @@ rospy.init_node('checkpoint')
 check_sub = rospy.Subscriber('check_point', PoseStamped, check_callback)
 done_pub = rospy.Publisher('check_done', Bool, queue_size=10)
 
-pose_pub = rospy.Publisher('move_to', PoseStamped, queue_size=10)
 pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
+pose_pub = rospy.Publisher('move_to', PoseStamped, queue_size=10)
 
 tf_buf   = tf2_ros.Buffer()
 
@@ -65,7 +65,9 @@ def main():
 		if rotate_to and curr_pose:
 			rot_to = rotate_to
 			rotate_to = None
-			#rotate
+			#find a good spot to rotate at
+			#go there
+			#then do the following
 
 
 			#rotate 2 thirds of a full rotation
@@ -91,8 +93,8 @@ def main():
 			rotate.pose.position.y = curr_pose.pose.position.y
 			rotate.pose.position.z = curr_pose.pose.position.z
 			pose_pub.publish(rotate)
-			
-			sleep(sleep_time_in_rotation)
+
+			sleep(sleep_time_in_rotation*2)
 
 
 			done_publish()

@@ -5,13 +5,9 @@
 import roslib
 import rospy
 from std_msgs.msg import Int32MultiArray
-from geometry_msgs.msg import PoseArray, Pose, PoseWithCovariance
+from geometry_msgs.msg import PoseWithCovariance
 from aruco_msgs.msg import MarkerArray, Marker
 
-
-
-#read about PoseArray:
-#http://docs.ros.org/melodic/api/geometry_msgs/html/msg/PoseArray.html
 
 boxes_msg = None
 
@@ -38,23 +34,25 @@ def main():
 			boxes = boxes_msg
 			boxes_mgs = None
 			#find the depth of found object(s)
-						
+
 
 			#calculate the complete pose of the object(s)
 			markers = []
 			for i in range(boxes.layout.dim[0].size):
 				m = Marker()
-				
+
+				#TODO: calculate covariance
 				p = PoseWithCovariance()
 				m.header.frame_id = "cf1/camera_link"
 				m.header.stamp = rospy.Time.now()
 				p.pose.position.x = boxes.data[4*i]
 				p.pose.position.y = boxes.data[4*i+1]
 				p.pose.position.z = (680-boxes.data[4*i+3])*1./340  #adjust function
+				p.pose.orientation.w = 1
 				print(boxes.data[4*i+3])
 				m.pose = p
 				markers.append(m)
-			
+
 			pose_marker = MarkerArray()
 			pose_marker.header.frame_id = "cf1/camera_link"
 			pose_marker.header.stamp = rospy.Time.now()
