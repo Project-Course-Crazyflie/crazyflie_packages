@@ -27,22 +27,25 @@ class ArucoFollower:
     def cf1_pose_callback(self, pose):
         self.cf1_pose = pose
         
-    def yaw_towards_frame(self, cf1_pose, target_frame, T=None):
+    def yaw_towards_frame(self, pose, target_frame, T=None):
         """Return the yaw towards frame represented in a quaternion (list)
         """
         # TODO: send in transform T as argument instead of calculating here
-        if not self.tf_buf.can_transform(target_frame, 'cf1/odom', rospy.Time(0)):
-            rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % target_frame)
+        if not self.tf_buf.can_transform(target_frame, 'map', rospy.Time(0)):
+            rospy.logwarn_throttle(5.0, 'No transform from %s to map' % target_frame)
             return
-            
+
+        if pose.header.frame_id != "map":
+            pose = self.tf_buf.transform(pose, 'map')
+
         frame_pose = PoseStamped() # [0, 0, 0]
         frame_pose.header.stamp = rospy.Time(0)
         frame_pose.header.frame_id = target_frame
         
-        p = self.tf_buf.transform(frame_pose, 'cf1/odom')
+        p = self.tf_buf.transform(frame_pose, 'map')
         
         frame_pos = np.array([p.pose.position.x, p.pose.position.y, p.pose.position.z])
-        curr = np.array([cf1_pose.pose.position.x, cf1_pose.pose.position.y, cf1_pose.pose.position.z])
+        curr = np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
                     
         diff = frame_pos-curr
         theta = np.arctan2(diff[1], diff[0])
@@ -62,7 +65,6 @@ class ArucoFollower:
             return
         
         # TODO: look up transform instead of using .transform multiple times
-        #(trans, rot) = self.tf_lstn.lookupTransform(aruco_frame, 'cf1/odom',  rospy.Time(0))
         aruco_pose = PoseStamped()
         
         aruco_pose.header.frame_id = aruco_frame
@@ -91,21 +93,6 @@ class ArucoFollower:
         
         goal_aruco = self.tf_buf.transform(goal_odom, aruco_frame)
         
-        
-        """
-        aruco_y_odom = np.array([p1.pose.position.x-p0.pose.position.x, 
-                                 p1.pose.position.y-p0.pose.position.y, 
-                                 p1.pose.position.z-p0.pose.position.z])
-                                 
-        if y_odom.pose.position.z < 0.1:
-            # y axle is parallell with x,y odom and aruco is treated as being on a wall
-            goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = p1.pose.position.x, p1.pose.position.y, p0.pose.position.z
-            
-        else:
-            # treated as being on the floor
-            pass
-        """
-        
         self.follower_pub.publish(goal_aruco)
 
     def follow_map(self, aruco_id):
@@ -118,24 +105,22 @@ class ArucoFollower:
             return
         
         # TODO: look up transform instead of using .transform multiple times
-        #(trans, rot) = self.tf_lstn.lookupTransform(aruco_frame, 'cf1/odom',  rospy.Time(0))
+       
         aruco_pose = PoseStamped()
         
         aruco_pose.header.frame_id = aruco_frame
         aruco_pose.header.stamp = rospy.Time.now()
-        
-        p0 = self.tf_buf.transform(aruco_pose, 'map')
+        p0 = self.tf_buf.transform(aruco_pose, "map")  #"map"
         aruco_pose.pose.position.y = 0.5
-        p1 = self.tf_buf.transform(aruco_pose, 'map')
-        
+        p1 = self.tf_buf.transform(aruco_pose, "map")  #"map"
         
         goal = PoseStamped()
         goal.header.frame_id = aruco_frame
         
         q = self.yaw_towards_frame(p1, target_frame=aruco_frame, T=None)
         
-        
         goal_map = PoseStamped()
+        goal_map.header.stamp = rospy.Time.now()
         goal_map.header.frame_id = "map"
         goal_map.pose.position.x = p1.pose.position.x
         goal_map.pose.position.y = p1.pose.position.y
