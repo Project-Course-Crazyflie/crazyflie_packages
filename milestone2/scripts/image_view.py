@@ -22,13 +22,9 @@ def callback(msg):
     image_msg = msg
     return
 
-def publish(msg):
-    image_pub.publish(msg)
-    return
 
 
 sub_pose = rospy.Subscriber('cf1/camera/image_raw', Image, callback)
-image_pub = rospy.Publisher('/training_img', Image, queue_size=5)
 rospy.init_node('traning_data')
 
 def main():
@@ -36,18 +32,22 @@ def main():
     rate = rospy.Rate(10) #Hz
     files = glob.glob("/home/robot/Traning_set/*.png")
     files.sort()
-    i = 0
-    print(files)
+    nb = 0      #nb of images saved
+    i = 0       #where to start the image names
+    
     if len(files) != 0 :
         string = files[-1].split('/')[-1]
         i = (int(string[5:-4]))+1
-    print(i)
     
 
 
-
     while not rospy.is_shutdown():
-        raw_input("Press any key to capture image ")
+        k = raw_input("Press any key to capture image, q to quit: ")
+        if k == 'q':
+            print(str(nb)+' images saved!')
+            rospy.signal_shutdown('')
+            continue
+
         if image_msg:
             try:
                 img = bridge.imgmsg_to_cv2(image_msg, 'bgr8')
@@ -64,9 +64,10 @@ def main():
 
             filename = 'image' + n + str(i) + '.png'
             path = os.path.join(os.path.expanduser('~'),'Traning_set',filename)
-            i+=1
+            i += 1
             if not cv2.imwrite(path, dst):
                 raise Exception("Could not write image")
+            nb += 1
         rate.sleep()
 
 if __name__ == '__main__':
