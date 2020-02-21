@@ -51,6 +51,7 @@ class ArucoFollower:
         
         return q_rot
 
+
     def follow_detected(self, aruco_id):
         aruco_frame = "aruco/detected" + str(aruco_id)
 
@@ -124,7 +125,7 @@ class ArucoFollower:
         aruco_pose.header.stamp = rospy.Time.now()
         
         p0 = self.tf_buf.transform(aruco_pose, 'map')
-        aruco_pose.pose.position.y = 1
+        aruco_pose.pose.position.y = 0.5
         p1 = self.tf_buf.transform(aruco_pose, 'map')
         
         
@@ -168,4 +169,6 @@ if __name__ == '__main__':
     follower = ArucoFollower()
     while not rospy.is_shutdown():
         aruco_id = inp = raw_input("Aruco marker to follow: ")
+
         follower.follow_map(aruco_id)
+        #follower.follow_detected(aruco_id)
