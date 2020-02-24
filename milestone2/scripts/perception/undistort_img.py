@@ -32,7 +32,7 @@ rospy.init_node('undistort_img')
 
 def main():
     global image_msg
-    rate = rospy.Rate(10) #Hz
+    rate = rospy.Rate(40) #Hz
 
     while not rospy.is_shutdown():
         if image_msg:
@@ -47,7 +47,7 @@ def main():
             dst = dst[y:y+h, x:x+w]
 
             #publish it 
-            publish(dist)
+            publish(bridge.cv2_to_imgmsg(dst, 'bgr8'))
 
         rate.sleep()
 

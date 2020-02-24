@@ -13,9 +13,7 @@ import glob
 
 image_msg = None
 bridge = CvBridge()
-mtx  = np.load('mtx.npy')
-dist = np.load('dist.npy')
-newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(640,480),1,(640,480))
+
 
 def callback(msg):
     global image_msg
@@ -24,7 +22,7 @@ def callback(msg):
 
 
 
-sub_pose = rospy.Subscriber('cf1/camera/image_raw', Image, callback)
+sub_pose = rospy.Subscriber('cf1/camera/image_undist', Image, callback)
 rospy.init_node('traning_data')
 
 def main():
@@ -54,10 +52,6 @@ def main():
             except CvBridgeError as e:
                 print(e)
             image_msg = None
-            #get undistorted image
-            dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
-            x,y,w,h = roi
-            dst = dst[y:y+h, x:x+w]
 
             n_0 = 4 - len(str(i))
             n = '0' * n_0
@@ -65,7 +59,7 @@ def main():
             filename = 'image' + n + str(i) + '.png'
             path = os.path.join(os.path.expanduser('~'),'Traning_set',filename)
             i += 1
-            if not cv2.imwrite(path, dst):
+            if not cv2.imwrite(path, img):
                 raise Exception("Could not write image")
             nb += 1
         rate.sleep()
