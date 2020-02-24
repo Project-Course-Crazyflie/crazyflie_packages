@@ -18,6 +18,7 @@ class MapOdomUpdate:
     def __init__(self):
         # TODO: import MarkerArray
         self.aruco_detect_sub = rospy.Subscriber('/aruco/markers', MarkerArray, self.update_callback)
+        
         self.old_msg = None
         self.last_transform = None
 
@@ -80,22 +81,22 @@ class MapOdomUpdate:
         
     def kalman_filter(self, transform):
         # TODO: Kalman filter, for now fixed kalman gain
-        K = 0.15
+        K = 0.05
 
         t = transform
         t.header.frame_id = "map"
         t.child_frame_id = "map_filtered"
         t.transform.translation.x = K*t.transform.translation.x
         t.transform.translation.y = K*t.transform.translation.y
-        t.transform.translation.z = K*t.transform.translation.z #*0 # Multiply by zero, no risk of drift
+        t.transform.translation.z = K*t.transform.translation.z *0 # Multiply by zero, no risk of drift
 
-        K_rot = 0.2
+        K_rot = 0.1
 
         q = [t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w]
         
         a1, a2, a3 = euler_from_quaternion(q)
-        a1 = K_rot*a1 #*0 # Multiply by zero, no risk of drift
-        a2 = K_rot*a2 #*0 # Multiply by zero, no risk of drift
+        a1 = K_rot*a1 *0 # Multiply by zero, no risk of drift
+        a2 = K_rot*a2 *0 # Multiply by zero, no risk of drift
         a3 = K_rot*a3
         q_new = quaternion_from_euler(a1, a2, a3)
         t.transform.rotation.x = q_new[0]
