@@ -9,7 +9,7 @@ import os.path
 import glob
 
 
-#publishe the camera_raw images at a slower rate
+#saves images from video feed
 
 image_msg = None
 bridge = CvBridge()

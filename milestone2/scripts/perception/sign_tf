@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+#import numpy as np
+#import cv2
+#from cv_bridge import CvBridge, CvBridgeError
+import roslib
+import rospy
+import tf2_ros
+import tf2_msgs
+import tf2_geometry_msgs
+from std_msgs.msg import Int32MultiArray
+from geometry_msgs.msg import TransformStamped, Vector3
+from geometry_msgs.msg import PoseStamped
+
+
+boxes_msg = None
+
+def callback(msg):
+	global boxes_msg
+	boxes_msg = msg
+	return
+
+def publish(msg):
+
+	br.sendTransform(msg)
+
+	return
+
+rospy.init_node("sign_tf")
+box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
+br = tf2_ros.TransformBroadcaster()
+
+fy = 220.72391163
+fx = 221.88078347
+real_size = 0.2
+n = 6
+
+def main():
+	global boxes_msg
+	rate = rospy.Rate(10) #Hz
+	while not rospy.is_shutdown():
+		if boxes_msg:
+			boxes = boxes_msg
+			boxes_msg = None
+			#find the depth of found object(s)
+
+
+			#calculate the complete tf of the object(s)
+			
+			for i in range(boxes.layout.dim[0].size):
+				t = TransformStamped()
+				t.header.stamp.secs = boxes.data[n*i+4]
+				t.header.stamp.nsecs = boxes.data[n*i+5]
+				t.header.frame_id = 'cf1/camera_link'
+				t.child_frame_id = 'sign_' + str(boxes.data[n*i+2])
+				
+				z=fy*real_size/(boxes.data[n*i+3])
+				x=(boxes.data[n*i]-640/2)*z/fx
+				y=(boxes.data[n*i+1]-480/2)*z/fy
+
+				t.transform.translation = Vector3(*[x, y, z])
+				t.transform.rotation.w = 1
+				publish(t)
+				
+		rate.sleep()
+	return
+
+if __name__ == '__main__':
+	main()
