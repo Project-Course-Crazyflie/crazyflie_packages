@@ -31,13 +31,13 @@ def img_publish(img):
 def box_publish(boxes):
 	msg = Int32MultiArray()
 	msg.layout.dim = [MultiArrayDimension(),MultiArrayDimension()]
-
+	n = 6
 	msg.layout.dim[0].label  = "n_boxes"
-	msg.layout.dim[0].size   = len(boxes)/4
+	msg.layout.dim[0].size   = len(boxes)/n
 	msg.layout.dim[0].stride = len(boxes)
 	msg.layout.dim[1].label  = "nums"
-	msg.layout.dim[1].size   = 4
-	msg.layout.dim[1].stride = 4
+	msg.layout.dim[1].size   = n
+	msg.layout.dim[1].stride = n
 	msg.layout.data_offset = 0
 
 	msg.data = boxes
@@ -76,10 +76,14 @@ def main():
 				img = bridge.imgmsg_to_cv2(image_msg, 'bgr8')
 			except CvBridgeError as e:
 				print(e)
+			stamp = image_msg.header.stamp.secs
+			stamp_ns = image_msg.header.stamp.nsecs
+
 
 			image_msg = None
 
 			(H, W) = img.shape[:2]
+
 
 			blob = cv2.dnn.blobFromImage(img,1./255)
 			darkNet.setInput(blob)
@@ -119,7 +123,7 @@ def main():
 						# update our list of bounding box coordinates, confidences,
 						# and class IDs
 						boxes.append([x, y, int(width), int(height)])
-						cboxes.extend([centerX, centerY, classID, height])
+						cboxes.extend([centerX, centerY, classID, height, stamp, stamp_ns])
 						confidences.append(float(conf))
 						classIDs.append(classID)
 
