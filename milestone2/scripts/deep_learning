@@ -14,9 +14,10 @@ from std_msgs.msg import Int32MultiArray, MultiArrayDimension
 image_msg = None
 bridge = CvBridge()
 
-def callback(img_msg):
+def callback(msg):
 	global image_msg
 	image_msg = msg
+	return
 
 def img_publish(img):
 	try:
@@ -73,10 +74,9 @@ def main():
 		if image_msg:
 			try:
 				img = bridge.imgmsg_to_cv2(image_msg, 'bgr8')
-				npim = np.array(img)
 			except CvBridgeError as e:
 				print(e)
-			return
+
 			image_msg = None
 
 			(H, W) = img.shape[:2]
