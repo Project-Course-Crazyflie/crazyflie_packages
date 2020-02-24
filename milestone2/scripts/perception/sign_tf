@@ -45,14 +45,14 @@ def main():
 
 
 			#calculate the complete tf of the object(s)
-			
+
 			for i in range(boxes.layout.dim[0].size):
 				t = TransformStamped()
 				t.header.stamp.secs = boxes.data[n*i+4]
 				t.header.stamp.nsecs = boxes.data[n*i+5]
 				t.header.frame_id = 'cf1/camera_link'
-				t.child_frame_id = 'sign_' + str(boxes.data[n*i+2])
-				
+				t.child_frame_id = 'stop_sign' + str(boxes.data[n*i+2])
+
 				z=fy*real_size/(boxes.data[n*i+3])
 				x=(boxes.data[n*i]-640/2)*z/fx
 				y=(boxes.data[n*i+1]-480/2)*z/fy
@@ -60,7 +60,7 @@ def main():
 				t.transform.translation = Vector3(*[x, y, z])
 				t.transform.rotation.w = 1
 				publish(t)
-				
+
 		rate.sleep()
 	return
 

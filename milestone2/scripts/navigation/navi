@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+
+import roslib
+import rospy
+import tf
+import math
+from std_msgs.msg import Bool, Int32MultiArray
+from geometry_msgs.msg import PoseStamped
+from aruco_msgs.msg import MarkerArray
+
+done = None
+box = None
+def done_callback(msg):
+	global done
+	done = msg
+
+def box_callback(msg):
+	global box
+	box = msg
+
+rospy.init_node('navi')
+done_pub = rospy.Subscriber('check_done', Bool, done_callback)
+box_sub = rospy.Subscriber('sign_box', Int32MultiArray, box_callback)
+check_pub = rospy.Publisher('check_point', PoseStamped, queue_size=1)
+
+pose_pub = rospy.Publisher('move_to', PoseStamped, queue_size=10)
+#pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
+
+#tf_buf   = tf2_ros.Buffer()
+
+
+#This node assumes that any seen object is something we want to check
+#And so it triggers the checkpoint ritual any time it receives a
+#
+def main():
+	label_file_name = 'labels'
+	rospy.loginfo('reading label file: '+label_file_name)
+	with open(label_file_name, 'rb') as f:
+		labels = f.read().strip().split("\n")
+		rospy.loginfo('reading labels:')
+		for a in labels:
+			rospy.loginfo(a)
+#	x,y,z,w = tf.transformations.quaternion_from_euler(0,0,math.pi/2)
+#	print(1./math.sqrt(2))
+#	print(x,y,z,w)
+
+	global done
+	global box
+
+
+	rate = rospy.Rate(10) #Hz
+	while not rospy.is_shutdown():
+
+		#receive "done" and stop
+		if done:
+
+			stay = PoseStamped()
+			stay.header.stamp = rospy.Time.now()
+			stay.header.frame_id = '/cf1/base_link'
+			stay.pose.orientation.w = 1
+			pose_pub.publish(stay)
+
+		if box:
+			#TODO: decide which object to check
+			#TODO: Check the stamp so it's not too long ago
+			object = box.data[2]
+			box = None
+
+			#Go closer to the checkpoint
+			checkpoint = PoseStamped()
+			checkpoint.header.frame_id = labels[object]
+			checkpoint.header.stamp = rospy.Time.now()
+			checkpoint.pose.position.x = 0.5
+			checkpoint.pose.orientation.x = 0
+			checkpoint.pose.orientation.y = 0
+			checkpoint.pose.orientation.z = 1./math.sqrt(2)
+			checkpoint.pose.orientation.w = 1./math.sqrt(2)
+
+			pose_pub.publish(checkpoint)
+
+			sleep(2)
+
+			#trigger checkpoint
+			checkpoint.pose.orientation.z = 0
+			checkpoint.pose.orientation.w = 1
+
+			check_pub.publish(checkpoint)
+			rospy.loginfo('Check, Mate')
+
+		rate.sleep()
+
+if __name__ == "__main__":
+	main()

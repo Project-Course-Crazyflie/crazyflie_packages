@@ -51,13 +51,13 @@ def main():
 				m.header.frame_id = "cf1/camera_link"
 				m.header.stamp.secs = boxes.data[n*i+4]
 				m.header.stamp.nsecs = boxes.data[n*i+5]
-				
+
 				p.pose.position.z = fy*real_size/(boxes.data[n*i+3])  #adjust function
 				p.pose.position.x = (boxes.data[n*i]-640/2)*p.pose.position.z/fx
 				p.pose.position.y = (boxes.data[n*i+1]-480/2)*p.pose.position.z/fy
 				p.pose.orientation.w = 1
 
-				
+
 				m.pose = p
 				markers.append(m)
 
