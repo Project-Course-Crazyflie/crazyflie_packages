@@ -246,7 +246,7 @@ def generate_and_publish_obstacles():
 
     """
 
-    mapFilePath = "../tutorial_1.world.json"
+    mapFilePath = "../../maps/tutorial_1.world.json"
     mapString = ""
 
     with open(os.path.join(os.path.dirname(__file__), mapFilePath), "r") as file:
