@@ -15,7 +15,7 @@
     </node>
     <node pkg="flight_camp" type="aruco_detection" name="aruco_detection">
     </node>
-    <node pkg="milestone2" type="displaymapmarkers.py" name="map_markers">
+    <node pkg="milestone2" type="displaymap.py" name="map_markers">
         <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
     </node>
     <!--<node pkg="milestone2" type="find_object_and_check_it" name="find_n_check">

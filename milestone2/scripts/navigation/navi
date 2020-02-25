@@ -68,7 +68,7 @@ def main():
 
 			#Go closer to the checkpoint
 			checkpoint = PoseStamped()
-			checkpoint.header.frame_id = labels[object]
+			checkpoint.header.frame_id = labels[object-10]
 			checkpoint.header.stamp = rospy.Time.now()
 			checkpoint.pose.position.x = 0.5
 			checkpoint.pose.orientation.x = 0
@@ -76,11 +76,12 @@ def main():
 			checkpoint.pose.orientation.z = 1./math.sqrt(2)
 			checkpoint.pose.orientation.w = 1./math.sqrt(2)
 
-			pose_pub.publish(checkpoint)
+			#pose_pub.publish(checkpoint)
 
 			sleep(2)
 
 			#trigger checkpoint
+			checkpoint.pose.position.x = 0
 			checkpoint.pose.orientation.z = 0
 			checkpoint.pose.orientation.w = 1
 
