@@ -77,14 +77,14 @@ def main():
 			send_goal([0,0,0,math.pi*2/3])
 			sleep(sleep_time_in_rotation)
 
-			if not tf_buf.can_transform('/cf1/odom', rot_to.data, rospy.Time.now()):
+			if not tf_buf.can_transform('cf1/odom', rot_to.data, rospy.Time.now()):
 				#roserror thing
 				continue
-			transform = tf_buf.lookup_transform('/cf1/odom', rot_to.data, rospy.Time.now())
+			transform = tf_buf.lookup_transform('cf1/odom', rot_to.data, rospy.Time.now())
 			quats = ArucoFollower.yaw_towards_frame(curr_pose, rot_to.data, transform)
 
 			rotate = PoseStamped()
-			rotate.header.frame_id = '/cf1/base_link'
+			rotate.header.frame_id = 'cf1/base_link'
 			rotate.header.stamp = rospy.Time.now()
 			rotate.pose.orientation.x = quats[0]
 			rotate.pose.orientation.y = quats[1]
