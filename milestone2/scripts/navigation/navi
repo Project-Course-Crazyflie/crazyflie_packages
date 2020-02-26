@@ -47,6 +47,7 @@ def main():
 
 	global done
 	global box
+	free = True
 
 
 	rate = rospy.Rate(10) #Hz
@@ -61,7 +62,8 @@ def main():
 			stay.pose.orientation.w = 1
 			pose_pub.publish(stay)
 
-		if box:
+		if box and free:
+			free = False
 			#TODO: decide which object to check
 			#TODO: Check the stamp so it's not too long ago
 			object = box.data[2]

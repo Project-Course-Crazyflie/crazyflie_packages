@@ -29,7 +29,7 @@ def pose_callback(msg):
 def done_publish():
 	msg = Bool()
 	msg.data = True
-	pose_pub.publish(msg)
+	done_pub.publish(msg)
 	return
 
 def send_goal(checkpoint):
@@ -50,52 +50,74 @@ def send_goal(checkpoint):
 	pose_pub.publish(goal)
 
 rospy.init_node('checkpoint')
+rospy.logwarn('-'*300)
 check_sub = rospy.Subscriber('check_point', String, check_callback)
 done_pub = rospy.Publisher('check_done', Bool, queue_size=10)
 
 pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
-pose_pub = rospy.Publisher('move_to', PoseStamped, queue_size=10)
+pose_pub = rospy.Publisher('cf1/move_to', PoseStamped, queue_size=10)
 
 tf_buf   = tf2_ros.Buffer()
+tf_lis = tf2_ros.TransformListener(tf_buf, queue_size=100)
+
+aruco_thing = ArucoFollower()
 
 
 def main():
+	rospy.logwarn('in main')
 	global curr_pose
 	global rotate_to
-	sleep_time_in_rotation = 0.2
+	sleep_time_in_rotation = 0.4
 
 	rate = rospy.Rate(10) #Hz
 	while not rospy.is_shutdown():
 		if rotate_to and curr_pose:
+			rospy.logwarn('Got a goal')
 			rot_to = rotate_to
 			rotate_to = None
 			#then do the following
 
 			#rotate 2 thirds of a full rotation
+			rospy.logwarn('starting rotation')
 			send_goal([0,0,0,math.pi*2/3])
-			sleep(sleep_time_in_rotation)
+			rospy.sleep(sleep_time_in_rotation)
 			send_goal([0,0,0,math.pi*2/3])
-			sleep(sleep_time_in_rotation)
+			rospy.sleep(sleep_time_in_rotation)
 
-			if not tf_buf.can_transform('/cf1/odom', rot_to.data, rospy.Time.now()):
-				#roserror thing
+			rospy.logwarn('constructing rotation message')
+			rospy.logwarn(rot_to.data)
+			"""
+			if not tf_buf.can_transform('cf1/odom', rot_to.data, rospy.Time(0)):
+
+				rospy.logwarn('couldn\'t transform to odom')
 				continue
-			transform = tf_buf.lookup_transform('/cf1/odom', rot_to.data, rospy.Time.now())
-			quats = ArucoFollower.yaw_towards_frame(curr_pose, rot_to.data, transform)
+
+
+			try:
+				transform = tf_buf.lookup_transform(rot_to.data,'cf1/odom', rospy.Time.now())
+			except tf2_ros.LookupException:#, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+				rospy.logwarn((tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException))
+				rate.sleep()
+				continue
+			"""
+			transform = tf_buf.lookup_transform('cf1/base_link',rot_to.data, rospy.Time(0))
+			quats = aruco_thing.yaw_towards_frame(curr_pose, rot_to.data, transform)
 
 			rotate = PoseStamped()
-			rotate.header.frame_id = '/cf1/base_link'
+			rotate.header.frame_id = 'cf1/base_link'
 			rotate.header.stamp = rospy.Time.now()
 			rotate.pose.orientation.x = quats[0]
 			rotate.pose.orientation.y = quats[1]
 			rotate.pose.orientation.z = quats[2]
 			rotate.pose.orientation.w = quats[3]
-			rotate.pose.position.x = curr_pose.pose.position.x
-			rotate.pose.position.y = curr_pose.pose.position.y
-			rotate.pose.position.z = curr_pose.pose.position.z
+			rotate.pose.position.x = 0
+			rotate.pose.position.y = 0
+			rotate.pose.position.z = 0
+			rospy.logwarn('rotating back')
 			pose_pub.publish(rotate)
 
-			sleep(sleep_time_in_rotation*2)
+
+			rospy.sleep(sleep_time_in_rotation*4)
 
 
 			done_publish()

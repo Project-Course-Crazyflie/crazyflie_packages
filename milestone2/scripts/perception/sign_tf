@@ -22,12 +22,12 @@ def callback(msg):
 def publish(msg):
 
 	br.sendTransform(msg)
-
 	return
 
 rospy.init_node("sign_tf")
 box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
 br = tf2_ros.TransformBroadcaster()
+
 
 fy = 220.72391163
 fx = 221.88078347
