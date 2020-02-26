@@ -34,6 +34,12 @@ fx = 221.88078347
 real_size = 0.2
 n = 6
 
+label_file_name = rospy.get_param(rospy.get_name() + '/labels')
+rospy.loginfo('reading label file: '+label_file_name)
+with open(label_file_name, 'rb') as f:
+	labels = f.read().strip().split("\n")
+	rospy.loginfo('reading labels:')
+
 def main():
 	global boxes_msg
 	rate = rospy.Rate(10) #Hz
@@ -51,7 +57,7 @@ def main():
 				t.header.stamp.secs = boxes.data[n*i+4]
 				t.header.stamp.nsecs = boxes.data[n*i+5]
 				t.header.frame_id = 'cf1/camera_link'
-				t.child_frame_id = 'stop_sign' + str(boxes.data[n*i+2])
+				t.child_frame_id = 'sign_dectected/' + labels[boxes.data[n*i+2]]
 
 				z=fy*real_size/(boxes.data[n*i+3])
 				x=(boxes.data[n*i]-640/2)*z/fx

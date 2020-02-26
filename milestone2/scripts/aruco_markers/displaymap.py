@@ -26,7 +26,7 @@ def transform_from_marker(m):
 def transform_from_sign(m):
     t = TransformStamped()
     t.header.frame_id = 'map'
-    t.child_frame_id =  'sign/' + str(m['sign'])
+    t.child_frame_id =  'sign/' + m['sign']
     t.transform.translation = Vector3(*m['pose']['position'])
     roll, pitch, yaw = m['pose']['orientation']
     (t.transform.rotation.x,

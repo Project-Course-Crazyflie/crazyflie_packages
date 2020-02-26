@@ -30,6 +30,7 @@ fy = 220.72391163
 fx = 221.88078347
 real_size = 0.2
 n = 6
+H, W = 446, 332
 
 def main():
 	global boxes_msg
@@ -53,8 +54,8 @@ def main():
 				m.header.stamp.nsecs = boxes.data[n*i+5]
 
 				p.pose.position.z = fy*real_size/(boxes.data[n*i+3])  #adjust function
-				p.pose.position.x = (boxes.data[n*i]-640/2)*p.pose.position.z/fx
-				p.pose.position.y = (boxes.data[n*i+1]-480/2)*p.pose.position.z/fy
+				p.pose.position.x = (boxes.data[n*i]-W/2)*p.pose.position.z/fx
+				p.pose.position.y = (boxes.data[n*i+1]-H/2)*p.pose.position.z/fy
 				p.pose.orientation.w = 1
 
 

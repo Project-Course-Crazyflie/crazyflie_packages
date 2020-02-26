@@ -1,0 +1,36 @@
+<launch>
+    <arg name="world_name" default='awesome'/>
+    <arg name="labels_file" default="$(find milestone2)/scripts/labels"/>
+    <arg name="coco_file" default="$(find milestone2)/scripts/perception/coco.names"/>
+    <arg name="cfg_file" default="$(find milestone2)/scripts/perception/yolov3-tiny.cfg"/>
+    <arg name="weights_file" default="$(find milestone2)/scripts/perception/yolov3-tiny.weights"/>
+
+
+    <include file="$(find dd2419_simulation)/launch/simulation.launch">
+        <arg name="gui" value="false"/>
+        <arg name="world_name" value="awesome"/>
+    </include>
+
+    <node pkg="milestone2" type="undistort_img.py" name="undistort_img">
+        <param name="mtx" value="$(find milestone2)/scripts/perception/mtx.npy"/>
+        <param name="dist" value="$(find milestone2)/scripts/perception/dist.npy"/>
+    </node>
+    <node pkg="milestone2" type="deep_learning" name="deep_learning">
+        <param name="coco" value="$(arg coco_file)"/>
+        <param name="cfg" value="$(arg cfg_file)"/>
+        <param name="weights" value="$(arg weights_file)"/>
+    </node>
+    <node pkg="milestone2" type="navgoal" name="navgoal_publisher"/>
+    <node pkg="milestone2" type="navi" name="navi">
+        <param name="labels" value="$(arg labels_file)"/>
+    </node>
+    <node pkg="milestone2" type="checkpoint.py" name="checkpoint"/>
+    <node pkg="milestone2" type="displaymap.py" name="map_markers">
+        <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
+    </node>
+
+    <node pkg="milestone2" type="update_map_to_odom.py" name="map_to_odom" />
+
+    <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_cam_trans" args="0.01 0 0.02 -1.57 0 -1.57 cf1/base_link cf1/camera_link"/>
+    <!--<node pkg="tf2_ros" type="static_transform_publisher" name="map_odom_tf" args="0 0 0 0 0 0 map cf1/odom"/>-->
+</launch>

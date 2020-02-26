@@ -10,11 +10,12 @@ import glob
 
 
 #saves images from video feed
+rospy.init_node('undistort_img')
 
 image_msg = None
 bridge = CvBridge()
-mtx  = np.load('mtx.npy')
-dist = np.load('dist.npy')
+mtx  = np.load(rospy.get_param(rospy.get_name() + "/mtx"))
+dist = np.load(rospy.get_param(rospy.get_name() + "/dist"))
 newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx,dist,(640,480),1,(640,480))
 
 def callback(msg):
@@ -28,7 +29,7 @@ def publish(msg):
 
 sub_pose = rospy.Subscriber('cf1/camera/image_raw', Image, callback)
 pub_img = rospy.Publisher('cf1/camera/image_undist', Image, queue_size=1)
-rospy.init_node('undistort_img')
+
 
 def main():
     global image_msg
@@ -45,6 +46,7 @@ def main():
             dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
             x,y,w,h = roi
             dst = dst[y:y+h, x:x+w]
+            # h, w = 446, 332
 
             #publish it 
             publish(bridge.cv2_to_imgmsg(dst, 'bgr8'))

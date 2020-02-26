@@ -4,9 +4,13 @@
 #from cv_bridge import CvBridge, CvBridgeError
 import roslib
 import rospy
-from std_msgs.msg import Bool
+import tf2_ros
+from std_msgs.msg import Bool, String
 from geometry_msgs.msg import PoseStamped
-
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from aruco_follower import ArucoFollower
+import math
+from time import sleep
 #def yaw_towards_frame(cf1_pose, target_frame, transform) returns list of quaternion point in frame cf1/odom
 
 rotate_to = None
@@ -46,7 +50,7 @@ def send_goal(checkpoint):
 	pose_pub.publish(goal)
 
 rospy.init_node('checkpoint')
-check_sub = rospy.Subscriber('check_point', PoseStamped, check_callback)
+check_sub = rospy.Subscriber('check_point', String, check_callback)
 done_pub = rospy.Publisher('check_done', Bool, queue_size=10)
 
 pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
@@ -58,17 +62,14 @@ tf_buf   = tf2_ros.Buffer()
 def main():
 	global curr_pose
 	global rotate_to
-	sleep_time_in_rotaion = 0.2
+	sleep_time_in_rotation = 0.2
 
 	rate = rospy.Rate(10) #Hz
 	while not rospy.is_shutdown():
 		if rotate_to and curr_pose:
 			rot_to = rotate_to
 			rotate_to = None
-			#find a good spot to rotate at
-			#go there
 			#then do the following
-
 
 			#rotate 2 thirds of a full rotation
 			send_goal([0,0,0,math.pi*2/3])
@@ -76,11 +77,11 @@ def main():
 			send_goal([0,0,0,math.pi*2/3])
 			sleep(sleep_time_in_rotation)
 
-			if not tf_buf.can_transform('/cf1/odom', rot_to.header.frame_id, rot_to.header.stamp,rospy.Duration(1.0)):
+			if not tf_buf.can_transform('/cf1/odom', rot_to.data, rospy.Time.now()):
 				#roserror thing
 				continue
-			transform = tf_buf.lookup_transform('/cf1/odom', rot_to, rospy.Time())
-			quats = yaw_towards_frame(curr_pose, rot_to, transform)
+			transform = tf_buf.lookup_transform('/cf1/odom', rot_to.data, rospy.Time.now())
+			quats = ArucoFollower.yaw_towards_frame(curr_pose, rot_to.data, transform)
 
 			rotate = PoseStamped()
 			rotate.header.frame_id = '/cf1/base_link'
