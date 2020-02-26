@@ -80,7 +80,7 @@ def main():
 			send_goal([0,0,0,math.pi*2/3])
 			rospy.sleep(sleep_time_in_rotation)
 			send_goal([0,0,0,math.pi*2/3])
-			rospy.sleep(sleep_time_in_rotation)
+			rospy.sleep(sleep_time_in_rotation/2.)
 
 			rospy.logwarn('constructing rotation message')
 			rospy.logwarn(rot_to.data)
@@ -103,16 +103,18 @@ def main():
 			quats = yaw_towards_frame(curr_pose, rot_to.data)
 			rospy.loginfo(euler_from_quaternion(quats))
 
+			pose = tf_buf.transform(curr_pose, 'map')
+
 			rotate = PoseStamped()
-			rotate.header.frame_id = 'cf1/base_link'
+			rotate.header.frame_id = 'map'
 			rotate.header.stamp = rospy.Time.now()
 			rotate.pose.orientation.x = quats[0]
 			rotate.pose.orientation.y = quats[1]
 			rotate.pose.orientation.z = quats[2]
 			rotate.pose.orientation.w = quats[3]
-			rotate.pose.position.x = 0
-			rotate.pose.position.y = 0
-			rotate.pose.position.z = 0
+			rotate.pose.position.x = pose.pose.position.x
+			rotate.pose.position.y = pose.pose.position.y
+			rotate.pose.position.z = pose.pose.position.z
 			rospy.logwarn('rotating back')
 			pose_pub.publish(rotate)
 
@@ -131,23 +133,32 @@ def yaw_towards_frame(pose, target_frame):
 	if not tf_buf.can_transform(target_frame, 'map', rospy.Time(0)):
 		rospy.logwarn_throttle(5.0, 'No transform from %s to map' % target_frame)
 		return
-	rospy.loginfo(['-'*20,pose])
+	#rospy.loginfo(['-'*20,pose])
 	if pose.header.frame_id != "map":
 		pose = tf_buf.transform(pose, 'map')
+	#rospy.loginfo(euler_from_quaternion([pose.pose.orientation.x,pose.pose.orientation.y,pose.pose.orientation.z,pose.pose.orientation.w]))
 
 	frame_pose = PoseStamped() # [0, 0, 0]
 	frame_pose.header.stamp = rospy.Time(0)
 	frame_pose.header.frame_id = target_frame
+	frame_pose.pose.orientation.w = 1
 
 	#rospy.loginfo(tf_buf.registration.print_me())
+
 
 	p = tf_buf.transform(frame_pose, 'map')
 
 	frame_pos = np.array([p.pose.position.x, p.pose.position.y, p.pose.position.z])
 	curr = np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
 
+	rospy.loginfo(curr)
+	rospy.loginfo(frame_pos)
+
+
 	diff = frame_pos-curr
+	rospy.loginfo(diff)
 	theta = np.arctan2(diff[1], diff[0])
+	rospy.loginfo(theta)
 
 	q_rot = quaternion_from_euler(0, 0, theta,"sxyz")
 
