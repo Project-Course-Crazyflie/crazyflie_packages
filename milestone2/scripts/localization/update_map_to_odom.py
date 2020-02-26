@@ -15,9 +15,13 @@ from crazyflie_driver.msg import Position
 from aruco_msgs.msg import MarkerArray
 
 class MapOdomUpdate:
-    def __init__(self):
+    def __init__(self, init_trans):
         # TODO: import MarkerArray
         self.aruco_detect_sub = rospy.Subscriber('/aruco/markers', MarkerArray, self.update_callback)
+        
+        init_trans.header.frame_id = "map"
+        init_trans.child_frame_id = "cf1/odom"
+        self.init_trans = init_trans
         
         self.old_msg = None
         self.last_transform = None
@@ -30,12 +34,8 @@ class MapOdomUpdate:
     def spin(self):
         while not rospy.is_shutdown():
             if self.last_transform == None:
-                t = TransformStamped()
-                t.header.stamp = rospy.Time.now()
-                t.header.frame_id = "map"
-                t.child_frame_id = "cf1/odom"
-                t.transform.rotation.w = 1
-                self.broadcaster.sendTransform(t)
+                self.init_trans.header.stamp = rospy.Time.now()
+                self.broadcaster.sendTransform(self.init_trans)
             else:
                 self.last_transform.header.stamp = rospy.Time.now()
                 self.broadcaster.sendTransform(self.last_transform)
@@ -108,5 +108,20 @@ class MapOdomUpdate:
         
 if __name__ == '__main__':
     rospy.init_node('map_to_odom')
-    p = MapOdomUpdate()
+    init_trans_str = rospy.get_param(rospy.get_name() + "/initial_map_to_odom")
+    init_trans_ls = [float(s.strip()) for s in init_trans_str.split()]
+    init_t = TransformStamped()
+    init_t.transform.translation.x = init_trans_ls[0]
+    init_t.transform.translation.y = init_trans_ls[1]
+    init_t.transform.translation.z = init_trans_ls[2]
+
+    (init_t.transform.rotation.x, 
+    init_t.transform.rotation.y, 
+    init_t.transform.rotation.z, 
+    init_t.transform.rotation.w) = quaternion_from_euler(init_trans_ls[3], 
+                                                         init_trans_ls[4], 
+                                                         init_trans_ls[5])
+
+
+    p = MapOdomUpdate(init_trans=init_t)
     p.spin()
