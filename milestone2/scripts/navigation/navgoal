@@ -18,7 +18,7 @@ def goal_callback(msg):
     if msg.pose.position.z == 0.0 and msg.header.frame_id == "cf1/odom":
         msg.pose.position.z = 0.5
 
-    rospy.loginfo('New goal set:\n%s', msg)
+    #rospy.loginfo('New goal set:\n%s', msg)
     goal = msg
 
 

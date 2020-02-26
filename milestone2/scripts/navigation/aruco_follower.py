@@ -15,7 +15,7 @@ from crazyflie_driver.msg import Position
 
 class ArucoFollower:
     def __init__(self):
-        
+
         self.follower_pub = rospy.Publisher('/cf1/move_to', PoseStamped, queue_size=2)
         self.cf1_pose_top = rospy.Subscriber('/cf1/pose', PoseStamped, self.cf1_pose_callback)
         self.cf1_pose = None
@@ -26,7 +26,7 @@ class ArucoFollower:
 
     def cf1_pose_callback(self, pose):
         self.cf1_pose = pose
-        
+
     def yaw_towards_frame(self, pose, target_frame, T=None):
         """Return the yaw towards frame represented in a quaternion (list)
         """
@@ -41,17 +41,17 @@ class ArucoFollower:
         frame_pose = PoseStamped() # [0, 0, 0]
         frame_pose.header.stamp = rospy.Time(0)
         frame_pose.header.frame_id = target_frame
-        
+
         p = self.tf_buf.transform(frame_pose, 'map')
-        
+
         frame_pos = np.array([p.pose.position.x, p.pose.position.y, p.pose.position.z])
         curr = np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
-                    
+
         diff = frame_pos-curr
         theta = np.arctan2(diff[1], diff[0])
-        
+
         q_rot = quaternion_from_euler(0, 0, theta,"sxyz")
-        
+
         return q_rot
 
 
@@ -63,36 +63,36 @@ class ArucoFollower:
         if not self.tf_buf.can_transform(aruco_frame, 'cf1/odom', rospy.Time(0)):
             rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % aruco_frame)
             return
-        
+
         # TODO: look up transform instead of using .transform multiple times
         aruco_pose = PoseStamped()
-        
+
         aruco_pose.header.frame_id = aruco_frame
         aruco_pose.header.stamp = rospy.Time(0)
-        
+
         p0 = self.tf_buf.transform(aruco_pose, 'cf1/odom')
         aruco_pose.pose.position.y = 0.5
         p1 = self.tf_buf.transform(aruco_pose, 'cf1/odom')
-        
-        
+
+
         goal = PoseStamped()
         goal.header.frame_id = aruco_frame
-        
+
         q = self.yaw_towards_frame(p1, target_frame=aruco_frame, T=None)
-        
-        
+
+
         goal_odom = PoseStamped()
         goal_odom.header.frame_id = "cf1/odom"
         goal_odom.pose.position.x = p1.pose.position.x
         goal_odom.pose.position.y = p1.pose.position.y
         goal_odom.pose.position.z = p1.pose.position.z # use p0 here to keep the crazyflie on the same height as the aruco marker
-        goal_odom.pose.orientation.x = q[0] 
+        goal_odom.pose.orientation.x = q[0]
         goal_odom.pose.orientation.y = q[1]
         goal_odom.pose.orientation.z = q[2]
         goal_odom.pose.orientation.w = q[3]
-        
+
         goal_aruco = self.tf_buf.transform(goal_odom, aruco_frame)
-        
+
         self.follower_pub.publish(goal_aruco)
 
     def follow_map(self, aruco_id):
@@ -103,50 +103,50 @@ class ArucoFollower:
         if not self.tf_buf.can_transform(aruco_frame, 'map', rospy.Time(0)):
             rospy.logwarn_throttle(5.0, 'No transform from %s to map' % aruco_frame)
             return
-        
+
         # TODO: look up transform instead of using .transform multiple times
-       
+
         aruco_pose = PoseStamped()
-        
+
         aruco_pose.header.frame_id = aruco_frame
         aruco_pose.header.stamp = rospy.Time.now()
         p0 = self.tf_buf.transform(aruco_pose, "map")  #"map"
         aruco_pose.pose.position.y = 0.5
         p1 = self.tf_buf.transform(aruco_pose, "map")  #"map"
-        
+
         goal = PoseStamped()
         goal.header.frame_id = aruco_frame
-        
+
         q = self.yaw_towards_frame(p1, target_frame=aruco_frame, T=None)
-        
+
         goal_map = PoseStamped()
         goal_map.header.stamp = rospy.Time.now()
         goal_map.header.frame_id = "map"
         goal_map.pose.position.x = p1.pose.position.x
         goal_map.pose.position.y = p1.pose.position.y
         goal_map.pose.position.z = p1.pose.position.z # use p0 here to keep the crazyflie on the same height as the aruco marker
-        goal_map.pose.orientation.x = q[0] 
+        goal_map.pose.orientation.x = q[0]
         goal_map.pose.orientation.y = q[1]
         goal_map.pose.orientation.z = q[2]
         goal_map.pose.orientation.w = q[3]
-        
+
         goal_aruco = self.tf_buf.transform(goal_map, aruco_frame)
-        
-        
+
+
         """
-        aruco_y_odom = np.array([p1.pose.position.x-p0.pose.position.x, 
-                                 p1.pose.position.y-p0.pose.position.y, 
+        aruco_y_odom = np.array([p1.pose.position.x-p0.pose.position.x,
+                                 p1.pose.position.y-p0.pose.position.y,
                                  p1.pose.position.z-p0.pose.position.z])
-                                 
+
         if y_odom.pose.position.z < 0.1:
             # y axle is parallell with x,y odom and aruco is treated as being on a wall
             goal.pose.position.x, goal.pose.position.y, goal.pose.position.z = p1.pose.position.x, p1.pose.position.y, p0.pose.position.z
-            
+
         else:
             # treated as being on the floor
             pass
         """
-        
+
         self.follower_pub.publish(goal_aruco)
 
 if __name__ == '__main__':

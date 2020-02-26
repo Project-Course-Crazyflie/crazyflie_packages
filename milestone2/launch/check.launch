@@ -6,10 +6,10 @@
     <arg name="weights_file" default="$(find milestone2)/scripts/perception/yolov3-tiny.weights"/>
 
 
-    <include file="$(find dd2419_simulation)/launch/simulation.launch">
+    <!--<include file="$(find dd2419_simulation)/launch/simulation.launch">
         <arg name="gui" value="false"/>
         <arg name="world_name" value="awesome"/>
-    </include>
+    </include> -->
 
     <node pkg="milestone2" type="undistort_img.py" name="undistort_img">
         <param name="mtx" value="$(find milestone2)/scripts/perception/mtx.npy"/>
@@ -30,6 +30,9 @@
     </node>
 
     <node pkg="milestone2" type="update_map_to_odom.py" name="map_to_odom" />
+    <node pkg="milestone2" type="sign_tf" name="hurga">
+        <param name="labels" value="$(arg labels_file)"/>
+    </node>
 
     <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_cam_trans" args="0.01 0 0.02 -1.57 0 -1.57 cf1/base_link cf1/camera_link"/>
     <!--<node pkg="tf2_ros" type="static_transform_publisher" name="map_odom_tf" args="0 0 0 0 0 0 map cf1/odom"/>-->
