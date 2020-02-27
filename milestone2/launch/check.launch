@@ -14,7 +14,8 @@
     <node pkg="milestone2" type="update_map_to_odom.py" name="map_to_odom_publisher">
         <param name="initial_map_to_odom" value="$(arg initial_map_to_odom)"/>
     </node>
-
+    <node pkg="flight_camp" type="aruco_detection" name="aruco_detection">
+    </node>
     <node pkg="milestone2" type="undistort_img.py" name="undistort_img">
         <param name="mtx" value="$(find milestone2)/scripts/perception/mtx.npy"/>
         <param name="dist" value="$(find milestone2)/scripts/perception/dist.npy"/>
@@ -34,7 +35,7 @@
     </node>
 
     
-    <node pkg="milestone2" type="sign_tf" name="hurga">
+    <node pkg="milestone2" type="sign_tf" name="sign_tf">
         <param name="labels" value="$(arg labels_file)"/>
     </node>
 

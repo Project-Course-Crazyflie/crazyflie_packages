@@ -19,14 +19,12 @@ def callback(msg):
 	boxes_msg = msg
 	return
 
-def publish(msg):
-
-	br.sendTransform(msg)
-	return
 
 rospy.init_node("sign_tf")
 box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
 br = tf2_ros.TransformBroadcaster()
+tf_buf   = tf2_ros.Buffer()
+tf_lis = tf2_ros.TransformListener(tf_buf, queue_size=10)
 
 
 fy = 220.72391163
@@ -53,19 +51,31 @@ def main():
 			#calculate the complete tf of the object(s)
 
 			for i in range(boxes.layout.dim[0].size):
-				t = TransformStamped()
-				t.header.stamp.secs = boxes.data[n*i+4]
-				t.header.stamp.nsecs = boxes.data[n*i+5]
-				t.header.frame_id = 'cf1/camera_link'
-				t.child_frame_id = 'sign_dectected/' + labels[boxes.data[n*i+2]]
-
+				p = PoseStamped()
+				p.header.frame_id = 'cf1/camera_link'
 				z=fy*real_size/(boxes.data[n*i+3])
 				x=(boxes.data[n*i]-640/2)*z/fx
 				y=(boxes.data[n*i+1]-480/2)*z/fy
+				p.header.stamp.secs = boxes.data[n*i+4]
+				p.header.stamp.nsecs = boxes.data[n*i+5]
+				p.pose.position.x = x
+				p.pose.position.y = y
+				p.pose.position.z = z
+				p.pose.orientation.w = 1
 
-				t.transform.translation = Vector3(*[x, y, z])
-				t.transform.rotation.w = 1
-				publish(t)
+				if not tf_buf.can_transform('map', 'cf1/camera_link', rospy.Time(0)):
+					rospy.logwarn_throttle(5.0, 'No transform from cf1/camera_link to map')
+					return
+
+				p = tf_buf.transform(p, 'map')
+
+				t = TransformStamped()
+				t.header.stamp = p.header.stamp
+				t.header.frame_id = 'map'
+				t.child_frame_id = 'sign_dectected/' + labels[boxes.data[n*i+2]]
+				t.transform.translation = p.pose.position
+				t.transform.rotation = p.pose.orientation
+				br.sendTransform(t)
 
 		rate.sleep()
 	return

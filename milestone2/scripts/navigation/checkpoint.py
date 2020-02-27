@@ -64,7 +64,7 @@ def main():
 	rospy.logwarn('in main')
 	global curr_pose
 	global rotate_to
-	sleep_time_in_rotation = 0.4
+	sleep_time_in_rotation = 1.
 
 	rate = rospy.Rate(10) #Hz
 	while not rospy.is_shutdown():
@@ -75,15 +75,14 @@ def main():
 			#then do the following
 			rospy.loginfo(type(curr_pose))
 
-			if curr_pose.pose.position.z < 0.2 :
-				send_goal([0,0,0.5,0])
+			
 
 			rospy.sleep(4.)
 			#rotate 2 thirds of a full rotation
 			rospy.logwarn('starting rotation')
-			send_goal([0,0,0,math.pi*2/3])
+			send_goal([0,0,0,math.pi*4/5])
 			rospy.sleep(sleep_time_in_rotation)
-			send_goal([0,0,0,math.pi*2/3])
+			send_goal([0,0,0,math.pi*4/5])
 			rospy.sleep(sleep_time_in_rotation/2.)
 
 			rospy.logwarn('constructing rotation message')
