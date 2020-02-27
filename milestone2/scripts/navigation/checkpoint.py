@@ -64,7 +64,7 @@ def main():
 	rospy.logwarn('in main')
 	global curr_pose
 	global rotate_to
-	sleep_time_in_rotation = 1.
+	sleep_time_in_rotation = 2.
 
 	rate = rospy.Rate(10) #Hz
 	while not rospy.is_shutdown():
