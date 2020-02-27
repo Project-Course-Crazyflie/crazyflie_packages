@@ -1,15 +1,19 @@
 <launch>
-    <arg name="world_name" default='awesome'/>
+    <arg name="world_name" default='simple_map'/>
     <arg name="labels_file" default="$(find milestone2)/scripts/labels"/>
     <arg name="coco_file" default="$(find milestone2)/scripts/perception/coco.names"/>
     <arg name="cfg_file" default="$(find milestone2)/scripts/perception/yolov3-tiny.cfg"/>
     <arg name="weights_file" default="$(find milestone2)/scripts/perception/yolov3-tiny.weights"/>
-
+    <arg name="initial_map_to_odom" default="-0.5 -0.5 0 0 0 0"/>
 
     <!--<include file="$(find dd2419_simulation)/launch/simulation.launch">
         <arg name="gui" value="false"/>
         <arg name="world_name" value="awesome"/>
     </include> -->
+
+    <node pkg="milestone2" type="update_map_to_odom.py" name="map_to_odom_publisher">
+        <param name="initial_map_to_odom" value="$(arg initial_map_to_odom)"/>
+    </node>
 
     <node pkg="milestone2" type="undistort_img.py" name="undistort_img">
         <param name="mtx" value="$(find milestone2)/scripts/perception/mtx.npy"/>
@@ -29,7 +33,7 @@
         <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
     </node>
 
-    <node pkg="milestone2" type="update_map_to_odom.py" name="map_to_odom" />
+    
     <node pkg="milestone2" type="sign_tf" name="hurga">
         <param name="labels" value="$(arg labels_file)"/>
     </node>

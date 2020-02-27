@@ -75,6 +75,10 @@ def main():
 			#then do the following
 			rospy.loginfo(type(curr_pose))
 
+			if curr_pose.pose.position.z < 0.2 :
+				send_goal([0,0,0.5,0])
+
+			rospy.sleep(4.)
 			#rotate 2 thirds of a full rotation
 			rospy.logwarn('starting rotation')
 			send_goal([0,0,0,math.pi*2/3])

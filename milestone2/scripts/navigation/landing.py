@@ -23,8 +23,7 @@ def callback_pose(msg):
     return
 
 def publish(msg):
-
-	
+	land_pub.publish(msg)
 	return
 
 rospy.init_node("landing")

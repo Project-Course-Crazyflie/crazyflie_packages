@@ -37,9 +37,9 @@ def how_to_use(json_path, default_physics_iterations):
 def main(argv):
     rospack = rospkg.RosPack()
     # get the file path for dd2419_simulation
-    sim_pkg_path = rospack.get_path('milestone2/sripts')
+    sim_pkg_path = rospack.get_path('milestone2/scripts')
     # get the file path for dd2419_resources
-    resource_pkg_path = rospack.get_path('milestone2/sripts')
+    resource_pkg_path = rospack.get_path('milestone2/scripts')
 
     json_path = resource_pkg_path + '/maps/'
 

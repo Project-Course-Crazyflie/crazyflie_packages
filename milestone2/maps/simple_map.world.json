@@ -11,7 +11,7 @@
 
   "gates": [],
   "walls": [],
-  "roadsigns": [{"sign": "stop", "pose": {"position": [1.5,  0.0, 0.1], "orientation": [0.0, -90.0, 90.0]}}],
+  "roadsigns": [{"sign": "stop", "pose": {"position": [0.3,  0.0, 0.5], "orientation": [0.0, -90.0, 90.0]}}],
 
   "markers": [
     {"id": 1, "pose": {"position": [0.0, 0.0, 0.5], "orientation": [0.0, 0.0, 0.0]}},
