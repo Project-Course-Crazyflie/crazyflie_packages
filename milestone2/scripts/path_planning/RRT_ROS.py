@@ -208,7 +208,7 @@ class RRT:
                 disty_list = [yy - y for y in node.y_path]
                 dist_list = [distx**2 + disty**2 for(distx, disty) in zip(distx_list, disty_list)]
 
-                if min(dist_list) < 0.6**2:
+                if min(dist_list) < 0.4:
                     return False #collision
 
         return True #safe
