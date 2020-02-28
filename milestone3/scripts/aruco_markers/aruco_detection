@@ -11,7 +11,13 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import TransformStamped, Vector3
 from crazyflie_driver.msg import Position
+
+import json
+#import common_msgs
+from visualization_msgs.msg import Marker as VMarker
+from visualization_msgs.msg import MarkerArray as VMarkerArray
 from aruco_msgs.msg import MarkerArray
+from aruco_msgs.msg import Marker
 
 # Current goal (global state)
 goal = None
@@ -20,7 +26,7 @@ last_msg = None
 
 def transform_from_marker(m):
     t = TransformStamped()
-    t.header.stamp = rospy.Time(0)
+    t.header.stamp = rospy.Time.now()
     t.header.frame_id = 'cf1/camera_link'
     t.child_frame_id = 'aruco/detected' + str(m.id)
     t.transform.translation = Vector3(*[m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z])

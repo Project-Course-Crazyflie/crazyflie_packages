@@ -93,7 +93,6 @@ class MapOdomUpdate:
         K_rot = 0.1
 
         q = [t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w]
-        
         a1, a2, a3 = euler_from_quaternion(q)
         a1 = K_rot*a1 *0 # Multiply by zero, no risk of drift
         a2 = K_rot*a2 *0 # Multiply by zero, no risk of drift

@@ -8,21 +8,50 @@ import tf2_msgs
 import tf2_geometry_msgs
 import tf
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import TransformStamped, Vector3
 from crazyflie_driver.msg import Position
 from aruco_msgs.msg import MarkerArray
 
+
+class KalmanFilter:
+    def __init__(self, initial_cov=np.array([0.1, 0.1]), R=np.array([0.01, 0.05])):
+        # position/mean not neaded since it will provided by the crazyflie
+        self.cov = initial_cov
+
+        # [xy, yaw]
+        self.R = R
+
+        #self.std_xy = 0.1
+        #self.std_yaw = 0.3
+
+    def predict(self, u=0):
+        # increase uncertainty depending on control input u
+        # u is the velocity?
+        self.cov[0] += self.R[0]**2
+        self.cov[1] += self.R[1]**2
+        return self.cov
+
+    def update(self, Q):
+        K_xy = self.cov[0]/(self.cov[0] + Q[0])
+        K_yaw = self.cov[1]/(self.cov[1] + Q[1])
+        self.cov[0] = (1-K_xy)*self.cov[0]
+        self.cov[1] = (1-K_yaw)*self.cov[1]
+        return K_xy, K_yaw
+
 class MapOdomUpdate:
     def __init__(self, init_trans):
         # TODO: import MarkerArray
         self.aruco_detect_sub = rospy.Subscriber('/aruco/markers', MarkerArray, self.update_callback)
-        
+        self.cf1_pose_sub = rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
+        self.cf1_pose_cov_pub = rospy.Publisher("cf1/pose_cov", PoseWithCovarianceStamped, queue_size=1)
+
         init_trans.header.frame_id = "map"
         init_trans.child_frame_id = "cf1/odom"
         self.init_trans = init_trans
-        
+
+        self.cf1_pose = None
         self.old_msg = None
         self.last_transform = None
 
@@ -30,15 +59,33 @@ class MapOdomUpdate:
         self.tf_lstn = tf2_ros.TransformListener(self.tf_buf, queue_size=100)
         self.broadcaster = tf2_ros.TransformBroadcaster()
        
+        self.kf = KalmanFilter()
     
     def spin(self):
+        rate = rospy.Rate(10)
         while not rospy.is_shutdown():
+            # determine u by checking if the drone is in motion
+            A = 0
+            self.kf.predict()
             if self.last_transform == None:
                 self.init_trans.header.stamp = rospy.Time.now()
                 self.broadcaster.sendTransform(self.init_trans)
             else:
                 self.last_transform.header.stamp = rospy.Time.now()
                 self.broadcaster.sendTransform(self.last_transform)
+            
+            if self.cf1_pose:
+                p = PoseWithCovarianceStamped()
+                p.header = self.cf1_pose.header
+                p.pose.pose = self.cf1_pose.pose
+                p.pose.covariance[0] = self.kf.cov[0]
+                p.pose.covariance[7] = self.kf.cov[0]
+                p.pose.covariance[-1] = self.kf.cov[1]
+                self.cf1_pose_cov_pub.publish(p)
+            rate.sleep()
+
+    def cf1_pose_callback(self, msg):
+        self.cf1_pose = msg
 
     def update_callback(self, m_array):
         if m_array == self.old_msg:
@@ -48,6 +95,7 @@ class MapOdomUpdate:
         
         # TODO: Make possible to update multiple markes?
         m = m_array.markers[0]
+
         frame_detected = "aruco/detected" + str(m.id)
         frame_map = "aruco/marker" + str(m.id)
         
@@ -79,9 +127,12 @@ class MapOdomUpdate:
         rospy.loginfo("Created new transform between map and cf1/odom")
         self.last_transform = map_to_odom
         
-    def kalman_filter(self, transform):
+    def kalman_filter(self, transform, cov=[0.1, 0.1]):
         # TODO: Kalman filter, for now fixed kalman gain
         K = 0.05
+        K_rot = 0.1
+
+        K, K_rot = self.kf.update(cov)
 
         t = transform
         t.header.frame_id = "map"
@@ -89,8 +140,6 @@ class MapOdomUpdate:
         t.transform.translation.x = K*t.transform.translation.x
         t.transform.translation.y = K*t.transform.translation.y
         t.transform.translation.z = K*t.transform.translation.z *0 # Multiply by zero, no risk of drift
-
-        K_rot = 0.1
 
         q = [t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w]
         
