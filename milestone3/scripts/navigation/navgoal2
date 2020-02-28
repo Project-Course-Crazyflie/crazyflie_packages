@@ -13,11 +13,11 @@ goal = None
 
 def goal_callback(msg):
     global goal
-    """
+    
     # RViz's "2D Nav Goal" publishes z=0, so add some altitude if needed.
     if msg.pose.position.z == 0.0:
-        msg.pose.position.z = 0.4
-    """
+        msg.pose.position.z = 0.5
+    
     rospy.loginfo('New goal set:\n%s', msg)
     goal = msg
 

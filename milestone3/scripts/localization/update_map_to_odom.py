@@ -64,9 +64,6 @@ class MapOdomUpdate:
     def spin(self):
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
-            # determine u by checking if the drone is in motion
-            A = 0
-            self.kf.predict()
             if self.last_transform == None:
                 self.init_trans.header.stamp = rospy.Time.now()
                 self.broadcaster.sendTransform(self.init_trans)
@@ -74,6 +71,9 @@ class MapOdomUpdate:
                 self.last_transform.header.stamp = rospy.Time.now()
                 self.broadcaster.sendTransform(self.last_transform)
             
+            # determine u by checking if the drone is in motion
+            A = 0
+            self.kf.predict()
             if self.cf1_pose:
                 p = PoseWithCovarianceStamped()
                 p.header = self.cf1_pose.header
