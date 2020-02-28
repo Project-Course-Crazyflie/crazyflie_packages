@@ -1,0 +1,106 @@
+#!/usr/bin/env python
+
+import roslib
+import rospy
+import tf2_ros
+import math
+from std_msgs.msg import Bool, Int32MultiArray, String
+from tf2_geometry_msgs import PoseStamped
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from aruco_msgs.msg import MarkerArray
+from time import sleep
+
+done = None
+box = None
+def done_callback(msg):
+	global done
+	done = msg
+
+def box_callback(msg):
+	global box
+	box = msg
+
+def send_goal(checkpoint):
+	goal = PoseStamped()
+	goal.header.stamp = rospy.Time.now()
+	goal.header.frame_id = 'cf1/base_link'
+	goal.pose.position.x = checkpoint[0]
+	goal.pose.position.y = checkpoint[1]
+	goal.pose.position.z = checkpoint[2]
+
+	x,y,z,w = quaternion_from_euler(0,0,checkpoint[3])
+
+	goal.pose.orientation.x = x
+	goal.pose.orientation.y = y
+	goal.pose.orientation.z = z
+	goal.pose.orientation.w = w
+
+	pose_pub.publish(goal)
+
+rospy.init_node('navi')
+done_pub = rospy.Subscriber('check_done', Bool, done_callback)
+box_sub = rospy.Subscriber('sign_box', Int32MultiArray, box_callback)
+check_pub = rospy.Publisher('check_point', String, queue_size=1)
+
+pose_pub = rospy.Publisher('move_to', PoseStamped, queue_size=10)
+#pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, pose_callback)
+
+tf_buf   = tf2_ros.Buffer()
+tf_lis = tf2_ros.TransformListener(tf_buf)
+
+#This node assumes that any seen object is something we want to check
+#And so it triggers the checkpoint ritual any time it receives a
+#
+def main():
+	label_file_name = rospy.get_param(rospy.get_name() + '/labels')
+	rospy.loginfo('reading label file: '+label_file_name)
+	with open(label_file_name, 'rb') as f:
+		labels = f.read().strip().split("\n")
+		rospy.loginfo('reading labels:')
+		for a in labels:
+			rospy.loginfo(a)
+#	x,y,z,w = tf.transformations.quaternion_from_euler(0,0,math.pi/2)
+#	print(1./math.sqrt(2))
+#	print(x,y,z,w)
+
+	global done
+	global box
+	free = True
+	k = True
+
+
+
+	rate = rospy.Rate(10) #Hz
+	while not rospy.is_shutdown():
+		if k:
+			rospy.sleep(3.)
+			send_goal([0,0,0.5,0])
+			k = False
+			
+		#receive "done" and stop
+		if done:
+
+			stay = PoseStamped()
+			stay.header.stamp = rospy.Time.now()
+			stay.header.frame_id = '/cf1/base_link'
+			stay.pose.orientation.w = 1
+			pose_pub.publish(stay)
+			done = None
+
+		if box and free:
+			free = False
+			#TODO: decide which object to check
+			#TODO: Check the stamp so it's not too long ago
+			object = box.data[2]
+			box = None
+
+			#Go closer to the checkpoint
+			checkpoint = String()
+			checkpoint.data = 'sign/' + labels[object]
+			check_pub.publish(checkpoint)
+			rospy.loginfo('Check, Mate')
+
+		rate.sleep()
+
+if __name__ == "__main__":
+	main()

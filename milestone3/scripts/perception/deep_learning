@@ -1,0 +1,161 @@
+#!/usr/bin/env python
+import numpy as np
+import cv2
+from cv_bridge import CvBridge, CvBridgeError
+import roslib
+import rospy
+from sensor_msgs.msg import Image
+from std_msgs.msg import Int32MultiArray, MultiArrayDimension
+
+#https://pjreddie.com/darknet/yolo/
+#get weights: wget https://pjreddie.com/media/files/yolov3.weights
+#get tiny weights: wget https://pjreddie.com/media/files/yolov3-tiny.weights
+
+image_msg = None
+bridge = CvBridge()
+
+def callback(msg):
+	global image_msg
+	image_msg = msg
+	return
+
+def img_publish(img):
+	try:
+		#Convert back to ROS format from CV and publish to the topic /myresult
+		image_pub.publish(bridge.cv2_to_imgmsg(img, 'bgr8'))
+		#print('published')
+	except CvBridgeError as e:
+		print(e)
+	return
+
+def box_publish(boxes):
+	msg = Int32MultiArray()
+	msg.layout.dim = [MultiArrayDimension(),MultiArrayDimension()]
+	n = 6
+	msg.layout.dim[0].label  = "n_boxes"
+	msg.layout.dim[0].size   = len(boxes)/n
+	msg.layout.dim[0].stride = len(boxes)
+	msg.layout.dim[1].label  = "nums"
+	msg.layout.dim[1].size   = n
+	msg.layout.dim[1].stride = n
+	msg.layout.data_offset = 0
+
+	msg.data = boxes
+	box_pub.publish(msg)
+	return
+
+rospy.init_node('yolo')
+
+coco_file_name = rospy.get_param(rospy.get_name() + '/coco')
+LABELS = open(coco_file_name).read().strip().split("\n")
+
+np.random.seed(42)
+COLORS = np.random.randint(0, 255, size=(len(LABELS), 3),dtype="uint8")
+
+#minimum probability to filter weak detections
+confidence = 0.7
+#threshold when applying non-maxima suppression
+threshold = 0.3
+
+cfgFile =rospy.get_param(rospy.get_name() + '/cfg')
+darknetModel = rospy.get_param(rospy.get_name() + '/weights')
+darkNet = cv2.dnn.readNetFromDarknet(cfgFile, darknetModel)
+darkNet.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+darkNet.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+
+sub_pose = rospy.Subscriber('cf1/camera/image_raw', Image, callback)
+image_pub = rospy.Publisher('/myresult', Image, queue_size=1)
+box_pub = rospy.Publisher('/sign_box', Int32MultiArray, queue_size=1)
+
+
+def main():
+
+	global image_msg
+
+	rate = rospy.Rate(3) #Hz
+	while not rospy.is_shutdown():
+
+		if image_msg:
+			try:
+				img = bridge.imgmsg_to_cv2(image_msg, 'bgr8')
+			except CvBridgeError as e:
+				print(e)
+			stamp = image_msg.header.stamp.secs
+			stamp_ns = image_msg.header.stamp.nsecs
+
+
+			image_msg = None
+
+			(H, W) = img.shape[:2]
+
+
+			blob = cv2.dnn.blobFromImage(img,1./255)
+			darkNet.setInput(blob)
+
+			#get output from multiple output layers and process them all
+			ln = darkNet.getLayerNames()
+			ln = [ln[i[0] - 1] for i in darkNet.getUnconnectedOutLayers()]
+			layerOutputs = darkNet.forward(ln)
+
+			boxes = []
+			cboxes = [] #same as boxes but retaining the centered coordinates
+			confidences = []
+			classIDs = []
+
+			# loop over each of the layer outputs
+			for output in layerOutputs:
+				# loop over each of the detections
+				for detection in output:
+					# extract the class ID and confidence (i.e., probability) of
+					# the current object detection
+					scores = detection[5:]
+					classID = 11#np.argmax(scores)
+					conf = scores[classID]#detection[4]#
+					# filter out weak predictions by ensuring the detected
+					# probability is greater than the minimum probability
+					if conf > confidence:# and detection[classID] > 0.5:
+						# scale the bounding box coordinates back relative to the
+						# size of the image, keeping in mind that YOLO actually
+						# returns the center (x, y)-coordinates of the bounding
+						# box followed by the boxes' width and height
+						box = detection[0:4] * np.array([W, H, W, H])
+						(centerX, centerY, width, height) = box.astype(np.int32)
+						# use the center (x, y)-coordinates to derive the top and
+						# and left corner of the bounding box
+						x = int(centerX - (width / 2))
+						y = int(centerY - (height / 2))
+						# update our list of bounding box coordinates, confidences,
+						# and class IDs
+						boxes.append([x, y, int(width), int(height)])
+						#14 is the magic number
+						#
+						###
+						#
+						#
+						#
+						cboxes.extend([centerX, centerY, 14, height, stamp, stamp_ns])
+						confidences.append(float(conf))
+						classIDs.append(classID)
+
+			idxs = cv2.dnn.NMSBoxes(boxes, confidences, confidence, threshold)
+
+			if len(idxs) > 0:
+				# loop over the indexes we are keeping
+				for i in idxs.flatten():
+					# extract the bounding box coordinates
+					(x, y) = (boxes[i][0], boxes[i][1])
+					(w, h) = (boxes[i][2], boxes[i][3])
+					# draw a bounding box rectangle and label on the image
+					color = [int(c) for c in COLORS[classIDs[i]]]
+
+					cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
+					text = "{}: {:.4f}".format(LABELS[classIDs[i]], confidences[i])
+					cv2.putText(img, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,0.5, color, 2)
+
+			if len(boxes):
+				img_publish(img)
+				box_publish(cboxes)
+		rate.sleep()
+
+if __name__ == '__main__':
+	main()

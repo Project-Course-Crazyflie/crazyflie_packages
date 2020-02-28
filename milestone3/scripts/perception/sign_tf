@@ -1,0 +1,84 @@
+#!/usr/bin/env python
+#import numpy as np
+#import cv2
+#from cv_bridge import CvBridge, CvBridgeError
+import roslib
+import rospy
+import tf2_ros
+import tf2_msgs
+import tf2_geometry_msgs
+from std_msgs.msg import Int32MultiArray
+from geometry_msgs.msg import TransformStamped, Vector3
+from geometry_msgs.msg import PoseStamped
+
+
+boxes_msg = None
+
+def callback(msg):
+	global boxes_msg
+	boxes_msg = msg
+	return
+
+
+rospy.init_node("sign_tf")
+box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
+br = tf2_ros.TransformBroadcaster()
+tf_buf   = tf2_ros.Buffer()
+tf_lis = tf2_ros.TransformListener(tf_buf, queue_size=10)
+
+
+fy = 220.72391163
+fx = 221.88078347
+real_size = 0.2
+n = 6
+
+label_file_name = rospy.get_param(rospy.get_name() + '/labels')
+rospy.loginfo('reading label file: '+label_file_name)
+with open(label_file_name, 'rb') as f:
+	labels = f.read().strip().split("\n")
+	rospy.loginfo('reading labels:')
+
+def main():
+	global boxes_msg
+	rate = rospy.Rate(10) #Hz
+	while not rospy.is_shutdown():
+		if boxes_msg:
+			boxes = boxes_msg
+			boxes_msg = None
+			#find the depth of found object(s)
+
+
+			#calculate the complete tf of the object(s)
+
+			for i in range(boxes.layout.dim[0].size):
+				p = PoseStamped()
+				p.header.frame_id = 'cf1/camera_link'
+				z=fy*real_size/(boxes.data[n*i+3])
+				x=(boxes.data[n*i]-640/2)*z/fx
+				y=(boxes.data[n*i+1]-480/2)*z/fy
+				p.header.stamp.secs = boxes.data[n*i+4]
+				p.header.stamp.nsecs = boxes.data[n*i+5]
+				p.pose.position.x = x
+				p.pose.position.y = y
+				p.pose.position.z = z
+				p.pose.orientation.w = 1
+
+				if not tf_buf.can_transform('map', 'cf1/camera_link', rospy.Time(0)):
+					rospy.logwarn_throttle(5.0, 'No transform from cf1/camera_link to map')
+					return
+
+				p = tf_buf.transform(p, 'map')
+
+				t = TransformStamped()
+				t.header.stamp = p.header.stamp
+				t.header.frame_id = 'map'
+				t.child_frame_id = 'sign_dectected/' + labels[boxes.data[n*i+2]]
+				t.transform.translation = p.pose.position
+				t.transform.rotation = p.pose.orientation
+				br.sendTransform(t)
+
+		rate.sleep()
+	return
+
+if __name__ == '__main__':
+	main()

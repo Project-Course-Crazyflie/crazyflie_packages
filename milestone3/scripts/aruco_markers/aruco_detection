@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+
+import math
+import numpy as np
+import rospy
+import tf2_ros
+import tf2_msgs
+import tf2_geometry_msgs
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseArray
+from geometry_msgs.msg import TransformStamped, Vector3
+from crazyflie_driver.msg import Position
+from aruco_msgs.msg import MarkerArray
+
+# Current goal (global state)
+goal = None
+pub_cmd = None
+last_msg = None
+
+def transform_from_marker(m):
+    t = TransformStamped()
+    t.header.stamp = rospy.Time(0)
+    t.header.frame_id = 'cf1/camera_link'
+    t.child_frame_id = 'aruco/detected' + str(m.id)
+    t.transform.translation = Vector3(*[m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z])
+    t.transform.rotation = m.pose.pose.orientation
+    return t
+
+def detect_callback(msg):
+    global goal
+    goal = msg
+   
+
+def publish_cmd(goal):
+    global last_msg
+    br = tf2_ros.TransformBroadcaster()
+    # Need to tell TF that the goal was just generated
+    rospy.loginfo("Transforming from %s to map" % goal.header.frame_id)
+    #time_diff = abs(int(goal.header.stamp.to_nsec()) - int(rospy.Time.now().to_nsec()))
+    
+    #if time_diff > 20000000:
+    #    rospy.loginfo("Last detection too old: " + str(time_diff))
+    #    return
+    if last_msg == goal:
+        # Allready processed
+        return
+
+    rospy.loginfo("Transforming " + str(len(goal.markers)) + " markers")
+    
+    transforms = []
+    
+    for m in goal.markers:
+        rospy.loginfo("ID: " + str(m.id))
+        trans_m = transform_from_marker(m)
+        transforms.append(trans_m)
+        br.sendTransform(trans_m)
+    last_msg = goal
+rospy.init_node('aruco_detection')
+
+
+def main():
+    global pub_cmd
+    
+    sub_aruco = rospy.Subscriber('/aruco/markers', MarkerArray, detect_callback)
+    rate = rospy.Rate(10)  # Hz
+    while not rospy.is_shutdown():
+        if goal:
+            publish_cmd(goal)
+        rate.sleep()
+
+if __name__ == '__main__':
+    main()
