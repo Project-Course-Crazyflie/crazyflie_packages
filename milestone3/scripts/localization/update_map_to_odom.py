@@ -23,8 +23,8 @@ class KalmanFilter:
         # [xy, yaw]
         self.R = R*delta_t
         self.delta_t = delta_t*1000
-        rospy.loginfo("DELTA T: " + str(self.delta_t))
-        rospy.loginfo("RRRRRRRRRRRRRRRRRRRRRRRRRRRR: " + str(self.R))
+        #rospy.loginfo("DELTA T: " + str(self.delta_t))
+        #rospy.loginfo("RRRRRRRRRRRRRRRRRRRRRRRRRRRR: " + str(self.R))
         
         #self.std_xy = 0.1
         #self.std_yaw = 0.3
@@ -59,7 +59,7 @@ class MapOdomUpdate:
         self.last_transform = None
 
         self.tf_buf = tf2_ros.Buffer()
-        self.tf_lstn = tf2_ros.TransformListener(self.tf_buf, queue_size=100)
+        self.tf_lstn = tf2_ros.TransformListener(self.tf_buf, queue_size=100) # should there be a queue_size?
         self.broadcaster = tf2_ros.TransformBroadcaster()
        
         self.update_freq = update_freq
@@ -79,9 +79,9 @@ class MapOdomUpdate:
             A = [1, 1]
             u = [0, 0]
             self.kf.predict(A, u)
-            if self.cf1_pose:
+            if self.cf1_pose: 
                 p = PoseWithCovarianceStamped()
-                p.header = self.cf1_pose.header
+                p.header = self.cf1_pose.header # correct to use cf1/odom as fram_id???
                 p.pose.pose = self.cf1_pose.pose
                 p.pose.covariance[0] = self.kf.cov[0]
                 p.pose.covariance[7] = self.kf.cov[0]
@@ -162,7 +162,7 @@ class MapOdomUpdate:
         return t
         
 if __name__ == '__main__':
-    rospy.init_node('map_to_odom')
+    rospy.init_node('update_map_to_odom')
     init_trans_str = rospy.get_param(rospy.get_name() + "/initial_map_to_odom")
     init_trans_ls = [float(s.strip()) for s in init_trans_str.split()]
     init_t = TransformStamped()

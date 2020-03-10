@@ -24,8 +24,9 @@
         <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
         <param name="labels" value="$(find milestone2)/scripts/$(arg labels)"/>
     </node>-->
-    <node pkg="milestone3" type="aruco_follower.py" name="aruco_follower">
-    </node>
+    
+    <!--node pkg="milestone3" type="aruco_follower.py" name="aruco_follower">
+    </node-->
 
 
 </launch>
