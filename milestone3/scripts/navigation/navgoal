@@ -8,62 +8,76 @@ from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import PoseStamped
 from crazyflie_driver.msg import Position
 
-# Current goal (global state)
-goal = None
+class NavGoalPublisher:
+    def __init__(self, transform_once_frames):
+        # transform_once_frames:= goals with these frames are transformed in the callback and 
+        #                         are effectively only transformed once
+        self.transform_once_frames = transform_once_frames
+        self.goal = None
 
-def goal_callback(msg):
-    global goal
+        rospy.Subscriber('cf1/move_to', PoseStamped, self.goal_callback)
+        self.pub_cmd = rospy.Publisher("cf1/cmd_position", Position, queue_size=2)
 
-    # RViz's "2D Nav Goal" publishes z=0, so add some altitude if needed.
-    if msg.pose.position.z == 0.0 and msg.header.frame_id == "cf1/odom":
-        msg.pose.position.z = 0.5
+        self.tf_buf = tf2_ros.Buffer()
+        tf2_ros.TransformListener(self.tf_buf)
 
-    #rospy.loginfo('New goal set:\n%s', msg)
-    goal = msg
+    def goal_callback(self, msg):
 
+        # RViz's "2D Nav Goal" publishes z=0, so add some altitude if needed.
+        if msg.pose.position.z == 0.0 and msg.header.frame_id in ["cf1/odom", "map"]:
+            msg.pose.position.z = 0.5
 
-    # Need to tell TF that the goal was just generated
-    goal.header.stamp = rospy.Time(0)
+        goal = msg
+        self.goal = goal
+        # Transform defined frames once
+        if goal.header.frame_id in self.transform_once_frames:
+            # Need to tell TF that the goal was just generated
+            goal.header.stamp = rospy.Time(0)
+            if not self.tf_buf.can_transform(goal.header.frame_id, 'cf1/odom', goal.header.stamp):
+                rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % goal.header.frame_id)
+                return
 
-    if not tf_buf.can_transform(goal.header.frame_id, 'cf1/odom', goal.header.stamp):
-        rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % goal.header.frame_id)
-        return
+            goal = self.tf_buf.transform(goal, 'cf1/odom')
+            self.goal = goal
+    
 
-    goal = tf_buf.transform(goal, 'cf1/odom')
+    def publish_cmd(self, goal):
+        # Transfor
+        if goal.header.frame_id != "cf1/odom":
+            goal.header.stamp = rospy.Time(0)
+            if not self.tf_buf.can_transform(goal.header.frame_id, 'cf1/odom', goal.header.stamp):
+                rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % goal.header.frame_id)
+                return
+            goal_odom = self.tf_buf.transform(goal, 'cf1/odom')
+        else:
+            goal_odom = goal
 
+        cmd = Position()
+        cmd.header.stamp = rospy.Time.now()
+        cmd.header.frame_id = goal_odom.header.frame_id
 
-def publish_cmd(goal_odom):
-    cmd = Position()
+        cmd.x = goal_odom.pose.position.x
+        cmd.y = goal_odom.pose.position.y
+        cmd.z = goal_odom.pose.position.z
 
-    cmd.header.stamp = rospy.Time.now()
-    cmd.header.frame_id = goal_odom.header.frame_id
+        _, _, yaw = euler_from_quaternion((goal_odom.pose.orientation.x,
+                                            goal_odom.pose.orientation.y,
+                                            goal_odom.pose.orientation.z,
+                                            goal_odom.pose.orientation.w))
 
-    cmd.x = goal_odom.pose.position.x
-    cmd.y = goal_odom.pose.position.y
-    cmd.z = goal_odom.pose.position.z
+        cmd.yaw = math.degrees(yaw)
+        self.pub_cmd.publish(cmd)
 
-    roll, pitch, yaw = euler_from_quaternion((goal_odom.pose.orientation.x,
-                                              goal_odom.pose.orientation.y,
-                                              goal_odom.pose.orientation.z,
-                                              goal_odom.pose.orientation.w))
+    def spin(self):
+        rate = rospy.Rate(20)
+        while not rospy.is_shutdown():
+            if self.goal:
+                self.publish_cmd(self.goal) # send in as arguments so they don't change during call
+            rate.sleep()
 
-    cmd.yaw = math.degrees(yaw)
-
-    pub_cmd.publish(cmd)
-
-
-rospy.init_node('navgoal')
-sub_goal = rospy.Subscriber('cf1/move_to', PoseStamped, goal_callback)
-pub_cmd  = rospy.Publisher('/cf1/cmd_position', Position, queue_size=2)
-tf_buf   = tf2_ros.Buffer()
-tf_lstn  = tf2_ros.TransformListener(tf_buf)
-
-def main():
-    rate = rospy.Rate(20)  # Hz
-    while not rospy.is_shutdown():
-        if goal:
-            publish_cmd(goal)
-        rate.sleep()
 
 if __name__ == '__main__':
-    main()
+    rospy.init_node('navgoal')
+    transform_once_frames = ["cf1/base_link", "cf1/camera_link"]
+    n = NavGoalPublisher(transform_once_frames)
+    n.spin()

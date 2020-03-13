@@ -22,7 +22,7 @@ class KalmanFilter:
 
         # [xy, yaw]
         self.R = R*delta_t
-        self.delta_t = delta_t*1000
+        self.delta_t = delta_t*1000 # wtf?
         #rospy.loginfo("DELTA T: " + str(self.delta_t))
         #rospy.loginfo("RRRRRRRRRRRRRRRRRRRRRRRRRRRR: " + str(self.R))
         
@@ -116,14 +116,20 @@ class MapOdomUpdate:
         self.broadcaster.sendTransform(detected_to_map_new)
 
         # Transform between map and measured map filtered using kalman filter
-        map_to_map_new = self.tf_buf.lookup_transform("map", "map_measured", rospy.Time(0))
+        while not rospy.is_shutdown():
+            try: map_to_map_new = self.tf_buf.lookup_transform("map", "map_measured", detected_to_map_new.header.stamp) # rospy.Time(0)
+            except: pass
+            else: break
         Q=[0.1, 0.01]
         map_filtered = self.kalman_filter(map_to_map_new, Q)
         map_filtered.header.stamp = rospy.Time.now()
         self.broadcaster.sendTransform(map_filtered)
 
         # Filtered map to cf1/odom redefines new map to cf1/odom
-        map_filtered_to_odom = self.tf_buf.lookup_transform("map_filtered", "cf1/odom", rospy.Time(0))
+        while not rospy.is_shutdown():
+            try: map_filtered_to_odom = self.tf_buf.lookup_transform("map_filtered", "cf1/odom", map_filtered.header.stamp) # rospy.Time(0)
+            except: pass
+            else: break
         map_filtered_to_odom.header.frame_id = "map"
         map_filtered_to_odom.child_frame_id = "cf1/odom"
         map_to_odom = map_filtered_to_odom
