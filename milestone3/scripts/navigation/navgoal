@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
 import math
+import numpy as np
 import rospy
 import tf2_ros
 import tf2_geometry_msgs
 from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Bool
 from crazyflie_driver.msg import Position
 
 class NavGoalPublisher:
@@ -14,12 +16,49 @@ class NavGoalPublisher:
         #                         are effectively only transformed once
         self.transform_once_frames = transform_once_frames
         self.goal = None
+        self.cf1_pose = None
 
         rospy.Subscriber('cf1/move_to', PoseStamped, self.goal_callback)
+        rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
         self.pub_cmd = rospy.Publisher("cf1/cmd_position", Position, queue_size=2)
+        self.at_goal_pub = rospy.Publisher("cf1/at_goal", Bool, queue_size=1)
 
         self.tf_buf = tf2_ros.Buffer()
         tf2_ros.TransformListener(self.tf_buf)
+
+    def cf1_pose_callback(self, msg):
+        self.cf1_pose = msg
+
+    def at_goal(self, goal_odom):
+        if not self.cf1_pose:
+            rospy.loginfo("Waiting for cf1/pose...")
+            return False
+        if not goal_odom:
+            rospy.loginfo("No goal is set...")
+            return False
+
+        g = np.array([goal_odom.pose.position.x, goal_odom.pose.position.y, goal_odom.pose.position.z])
+        curr = np.array([self.cf1_pose.pose.position.x, self.cf1_pose.pose.position.y, self.cf1_pose.pose.position.z])
+        
+        yaw_act = euler_from_quaternion([self.cf1_pose.pose.orientation.x, 
+                                        self.cf1_pose.pose.orientation.y, 
+                                        self.cf1_pose.pose.orientation.z, 
+                                        self.cf1_pose.pose.orientation.w])
+
+        yaw_goal = euler_from_quaternion([goal_odom.pose.orientation.x, 
+                                        goal_odom.pose.orientation.y, 
+                                        goal_odom.pose.orientation.z, 
+                                        goal_odom.pose.orientation.w])
+
+        
+        diff = g-curr
+        err = np.linalg.norm(diff)
+
+        err_yaw = (yaw_act[2]-yaw_goal[2] + np.pi) % (2*np.pi) - np.pi
+
+        at_waypoint = err < 0.2 and err_yaw < 0.1
+        #rospy.loginfo("At goal?: " + str(at_waypoint))
+        return at_waypoint
 
     def goal_callback(self, msg):
 
@@ -66,6 +105,7 @@ class NavGoalPublisher:
                                             goal_odom.pose.orientation.w))
 
         cmd.yaw = math.degrees(yaw)
+        self.at_goal_pub.publish(Bool(self.at_goal(goal_odom)))
         self.pub_cmd.publish(cmd)
 
     def spin(self):
