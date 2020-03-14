@@ -18,26 +18,19 @@ from aruco_msgs.msg import MarkerArray
 class KalmanFilter:
     def __init__(self, initial_cov, R, delta_t):
         # position/mean not neaded since it will provided by the crazyflie
-        self.cov = initial_cov
+        self.cov = np.diag(initial_cov)
+        self.R = np.diag(R)
+        self.delta_t = delta_t
 
-        # [xy, yaw]
-        self.R = R#*delta_t
-        self.delta_t = delta_t#*1000 # wtf?
-        #rospy.loginfo("DELTA T: " + str(self.delta_t))
-        #rospy.loginfo("RRRRRRRRRRRRRRRRRRRRRRRRRRRR: " + str(self.R))
-        
-        #self.std_xy = 0.1
-        #self.std_yaw = 0.3
-
-    def predict(self, A, u):
+    def _predict(self, A, u):
         # increase uncertainty depending on control input u
         # u is the velocity?
-        self.cov[0] = self.cov[0]*A[0]**2 + self.R[0]*self.delta_t + u[0]*self.delta_t
-        self.cov[1] = self.cov[1]*A[1]**2 + self.R[1]*self.delta_t + u[1]*self.delta_t
-        self.cov[2] = self.cov[2]*A[2]**2 + self.R[2]*self.delta_t + u[2]*self.delta_t
+        self.cov[0][0] = self.cov[0][0]*A[0][0]**2 + self.R[0][0]*self.delta_t + u[0]*self.delta_t
+        self.cov[1][1] = self.cov[1][1]*A[1][1]**2 + self.R[1][1]*self.delta_t + u[1]*self.delta_t
+        self.cov[2][2] = self.cov[2][2]*A[2][2]**2 + self.R[2][2]*self.delta_t + u[2]*self.delta_t
         return self.cov
 
-    def update(self, Q):
+    def _update(self, Q):
         K_x = self.cov[0]/(self.cov[0] + Q[0])
         K_y = self.cov[1]/(self.cov[1] + Q[1])
         K_yaw = self.cov[2]/(self.cov[2] + Q[2])
@@ -46,8 +39,16 @@ class KalmanFilter:
         self.cov[2] = (1-K_yaw)*self.cov[2]
         return K_x, K_y, K_yaw
 
+    def predict(self, A, u):
+        self.cov = np.matmul(np.matmul(A, self.cov), A) + self.R*self.delta_t
+
+    def update(self, Q):
+        K = np.matmul(self.cov, np.linalg.inv(self.cov + np.diag(Q)))
+        self.cov = np.matmul((np.eye(K.shape[0])-K), self.cov)
+        return K.diagonal()
+
 class MapOdomUpdate:
-    def __init__(self, init_trans, update_freq=10):
+    def __init__(self, init_trans, update_freq):
         # TODO: import MarkerArray
         self.aruco_detect_sub = rospy.Subscriber('/aruco/markers', MarkerArray, self.update_callback)
         self.cf1_pose_sub = rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
@@ -71,12 +72,18 @@ class MapOdomUpdate:
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster()
        
         self.update_freq = update_freq
-        self.kf = KalmanFilter(initial_cov=np.array([0.01, 0.01, 0.01]), R=np.array([.0001, .0001, .0005]), delta_t=1.0/self.update_freq)
+        self.kf = KalmanFilter(initial_cov=np.array([0.01, 0.01, 0.01]), R=np.array([.0005, .0005, .001]), delta_t=1.0/self.update_freq)
         #self.kf = KalmanFilter(initial_cov=np.array([0.1, 0.1, 0.1]), R=np.array([0.005, 1.0, 1.0]), delta_t=1.0/self.update_freq)
     
     def spin(self):
         rate = rospy.Rate(self.update_freq)
         while not rospy.is_shutdown():
+
+            A = np.diag([1, 1, 1])
+            u = [0, 0, 0]
+            self.kf.predict(A, u)
+
+            if self.measurement_msg: self.update(self.measurement_msg)
 
             if self.last_transform == None:
                 self.init_trans.header.stamp = rospy.Time.now()
@@ -86,7 +93,8 @@ class MapOdomUpdate:
                 self.broadcaster.sendTransform(self.last_transform)
             
             # determine u by checking if the drone is in motion
-            if self.cf1_vel:
+            """
+            if False and self.cf1_vel:
                 K_vel = 0.5
                 vx = self.cf1_vel.twist.linear.x * K_vel
                 vy = self.cf1_vel.twist.linear.y * K_vel
@@ -95,22 +103,28 @@ class MapOdomUpdate:
                 A = [1 + abs(vx)*dt, 1 + abs(vy)*dt, 1 + abs(w)*dt]
                 u = [0, 0, 0]
                 self.kf.predict(A, u)
+
+            elif False and self.cf1_vel:
+                A = np.eye(4)
+                A[0][2] = 1.0/self.update_freq
+                A[1][3] = 1.0/self.update_freq
+                self.kf.predict(A, u)
             else:
                 A = [1, 1, 1]
                 u = [0, 0, 0]
                 self.kf.predict(A, u)
+            """
 
-            if self.measurement_msg: self.update(self.measurement_msg)
 
             if self.cf1_pose: 
                 p = PoseWithCovarianceStamped()
                 p.header = self.cf1_pose.header # correct to use cf1/odom as frame_id???
                 p.pose.pose = self.cf1_pose.pose
-                p.pose.covariance[0] = self.kf.cov[0]
-                p.pose.covariance[1] = self.kf.cov[0]*self.kf.cov[1]
-                p.pose.covariance[6] = self.kf.cov[0]*self.kf.cov[1]
-                p.pose.covariance[7] = self.kf.cov[1]
-                p.pose.covariance[-1] = self.kf.cov[2]
+                p.pose.covariance[0] = self.kf.cov[0][0]
+                p.pose.covariance[1] = self.kf.cov[0][0]*self.kf.cov[1][1]
+                p.pose.covariance[6] = self.kf.cov[0][0]*self.kf.cov[1][1]
+                p.pose.covariance[7] = self.kf.cov[1][1]
+                p.pose.covariance[-1] = self.kf.cov[2][2]
                 self.cf1_pose_cov_pub.publish(p)
             rate.sleep()
 
@@ -124,17 +138,9 @@ class MapOdomUpdate:
         self.measurement_msg = msg
 
     def update(self, m_array):
-        print("here")
         if self.old_msg == m_array:
             # Message old 
-            #raise Exception("ITS TOO OLD")
-            print("old")
             return
-        else:
-            if self.old_msg:
-                print("not old")
-                print(len(m_array.markers))
-                print(len(self.old_msg.markers))
         self.old_msg = m_array
         
         # TODO: Make possible to update multiple markes?
@@ -148,14 +154,19 @@ class MapOdomUpdate:
             return
 
         # Transform between marker and map is the same as detected to measured map
-        detected_to_map_new = self.tf_buf.lookup_transform(frame_map, "map", rospy.Time(0))
+        while not rospy.is_shutdown():
+            try: detected_to_map_new = self.tf_buf.lookup_transform(frame_map, "map", rospy.Time(0), rospy.Duration(1.0))
+            except: print("walla0")
+            else: break
+        #detected_to_map_new.header.stamp = rospy.Time.now()
+        print(detected_to_map_new.header.stamp)
         detected_to_map_new.header.frame_id = frame_detected
         detected_to_map_new.child_frame_id = "map_measured"
-        self.static_broadcaster.sendTransform(detected_to_map_new)
+        self.static_broadcaster.sendTransform(detected_to_map_new) # Why doesnt it work with the normal broadcaster???
 
         # Transform between map and measured map filtered using kalman filter
         while not rospy.is_shutdown():
-            try: map_to_map_new = self.tf_buf.lookup_transform("map", "map_measured", rospy.Time(0)) # rospy.Time(0)
+            try: map_to_map_new = self.tf_buf.lookup_transform("map", "map_measured", rospy.Time(0), rospy.Duration(1.0)) # rospy.Time(0)
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e: 
                 print(e)
                 print("walla1")
@@ -168,7 +179,7 @@ class MapOdomUpdate:
         # Filtered map to cf1/odom redefines new map to cf1/odom
         while not rospy.is_shutdown():
             try: 
-                map_filtered_to_odom = self.tf_buf.lookup_transform("map_filtered", "cf1/odom", rospy.Time(0)) # rospy.Time(0)
+                map_filtered_to_odom = self.tf_buf.lookup_transform("map_filtered", "cf1/odom", rospy.Time(0), rospy.Duration(1.0)) # rospy.Time(0)
             except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e: 
                 print(e)
                 print("walla2")
@@ -194,13 +205,13 @@ class MapOdomUpdate:
         new_t.child_frame_id = "map_filtered"
         new_t.transform.translation.x = Kx*t.transform.translation.x
         new_t.transform.translation.y = Ky*t.transform.translation.y
-        #t.transform.translation.z = Kx*t.transform.translation.z *0 # Multiply by zero, no risk of drift
+        t.transform.translation.z = (Kx+Ky)/2*t.transform.translation.z #*0 # Multiply by zero, no risk of drift
 
         q = [t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w]
         
         a1, a2, a3 = euler_from_quaternion(q)
-        a1 = K_rot*a1 #*0 # Multiply by zero, no risk of drift
-        a2 = K_rot*a2 #*0 # Multiply by zero, no risk of drift
+        a1 = K_rot*a1 *0 # Multiply by zero, no risk of drift
+        a2 = K_rot*a2 *0 # Multiply by zero, no risk of drift
         a3 = K_rot*a3
         q_new = quaternion_from_euler(a1, a2, a3)
         new_t.transform.rotation.x = q_new[0]
