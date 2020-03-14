@@ -23,7 +23,7 @@ from aruco_msgs.msg import Marker
 goal = None
 pub_cmd = None
 last_msg = None
-
+br = tf2_ros.TransformBroadcaster()
 def transform_from_marker(m):
     t = TransformStamped()
     t.header.stamp = rospy.Time.now()
@@ -40,9 +40,9 @@ def detect_callback(msg):
 
 def publish_cmd(goal):
     global last_msg
-    br = tf2_ros.TransformBroadcaster()
+    global br
     # Need to tell TF that the goal was just generated
-    rospy.loginfo("Transforming from %s to map" % goal.header.frame_id)
+    #rospy.loginfo("Transforming from %s to map" % goal.header.frame_id)
     #time_diff = abs(int(goal.header.stamp.to_nsec()) - int(rospy.Time.now().to_nsec()))
     
     #if time_diff > 20000000:
@@ -50,6 +50,7 @@ def publish_cmd(goal):
     #    return
     if last_msg == goal:
         # Allready processed
+        rospy.loginfo("TOO OLD ARUCO_MARKES LIST")
         return
 
     rospy.loginfo("Transforming " + str(len(goal.markers)) + " markers")
@@ -60,7 +61,8 @@ def publish_cmd(goal):
         rospy.loginfo("ID: " + str(m.id))
         trans_m = transform_from_marker(m)
         transforms.append(trans_m)
-        br.sendTransform(trans_m)
+
+    br.sendTransform(transforms)
     last_msg = goal
 rospy.init_node('aruco_detection')
 
@@ -69,7 +71,7 @@ def main():
     global pub_cmd
     
     sub_aruco = rospy.Subscriber('/aruco/markers', MarkerArray, detect_callback)
-    rate = rospy.Rate(10)  # Hz
+    rate = rospy.Rate(20)  # Hz
     while not rospy.is_shutdown():
         if goal:
             publish_cmd(goal)
