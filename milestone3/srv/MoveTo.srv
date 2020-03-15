@@ -1,0 +1,8 @@
+geometry_msgs/PoseStamped goal
+float32 pos_thres
+float32 yaw_thres
+float32 vel_thres
+float32 vel_yaw_thres
+float32 duration
+---
+std_msgs/Bool at_goal
