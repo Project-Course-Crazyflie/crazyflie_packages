@@ -12,7 +12,7 @@
     <node pkg="milestone3" type="update_map_to_odom.py" name="map_to_odom_publisher">
         <param name="initial_map_to_odom" value="$(arg initial_map_to_odom)"/>
     </node>
-    <node pkg="milestone3" type="navgoal" name="navgoal_publisher">
+    <node pkg="milestone3" type="navgoal_server" name="navgoal_publisher">
         
     </node>
     <node pkg="milestone3" type="aruco_detection" name="aruco_detection">
