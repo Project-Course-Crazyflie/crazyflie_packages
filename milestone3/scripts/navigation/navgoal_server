@@ -1,0 +1,172 @@
+#!/usr/bin/env python
+import time
+import math
+import numpy as np
+import rospy
+import tf2_ros
+import tf2_geometry_msgs
+from tf.transformations import euler_from_quaternion
+from geometry_msgs.msg import PoseStamped, TwistStamped
+from std_msgs.msg import Bool
+from crazyflie_driver.msg import Position
+
+from milestone3.srv import MoveTo, MoveToResponse, MoveToRequest
+
+class NavGoalPublisher:
+    def __init__(self, transform_once_frames):
+        # transform_once_frames:= goals with these frames are transformed in the callback and 
+        #                         are effectively only transformed once
+        self.transform_once_frames = transform_once_frames
+        self.goal = None
+        self.cf1_pose = None
+        self.cf1_vel = None
+
+        rospy.Service("cf1/move_to_service", MoveTo, self.goal_callback)
+        rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
+        rospy.Subscriber("cf1/velocity", TwistStamped, self.cf1_vel_callback)
+        self.pub_cmd = rospy.Publisher("cf1/cmd_position", Position, queue_size=2)
+        self.at_goal_pub = rospy.Publisher("cf1/at_goal", Bool, queue_size=1)
+
+        self.tf_buf = tf2_ros.Buffer()
+        tf2_ros.TransformListener(self.tf_buf)
+
+        # Used in at_goal()
+        self.is_at_goal = False
+        self.pos_thres = None
+        self.yaw_thres = None
+        self.vel_thres = None 
+        self.vel_yaw_thres = None
+        self.duration = None
+
+    def cf1_pose_callback(self, msg):
+        self.cf1_pose = msg
+
+    def cf1_vel_callback(self, msg):
+        self.cf1_vel = msg
+
+    def at_goal(self, goal_odom):
+        if not self.cf1_pose:
+            rospy.logwarn_throttle(5.0, "cf1/pose not available. Can't determine if at goal...")
+            return False
+        if not self.cf1_vel:
+            rospy.logwarn_throttle(5.0, "cf1/velocity not available. Ignoring velocity thresholds for navgoal...")
+        if not goal_odom:
+            rospy.loginfo("No goal is set...")
+            return False
+
+        g = np.array([goal_odom.pose.position.x, goal_odom.pose.position.y, goal_odom.pose.position.z])
+        curr = np.array([self.cf1_pose.pose.position.x, self.cf1_pose.pose.position.y, self.cf1_pose.pose.position.z])
+        
+        yaw_act = euler_from_quaternion([self.cf1_pose.pose.orientation.x, 
+                                        self.cf1_pose.pose.orientation.y, 
+                                        self.cf1_pose.pose.orientation.z, 
+                                        self.cf1_pose.pose.orientation.w])
+
+        yaw_goal = euler_from_quaternion([goal_odom.pose.orientation.x, 
+                                        goal_odom.pose.orientation.y, 
+                                        goal_odom.pose.orientation.z, 
+                                        goal_odom.pose.orientation.w])
+
+        
+        diff = g-curr
+        err = np.linalg.norm(diff)
+        err_yaw = abs((yaw_goal[2]-yaw_act[2] + np.pi) % (2*np.pi) - np.pi)
+        if self.cf1_vel:
+            vel = np.sqrt(self.cf1_vel.twist.linear.x**2 + self.cf1_vel.twist.linear.y**2)
+            vel_yaw = abs(self.cf1_vel.twist.angular.z)
+        else:
+            vel = 0
+            vel_yaw = 0
+
+        if 0 in [self.pos_thres, self.yaw_thres, self.vel_thres, self.vel_yaw_thres]:
+            rospy.logwarn_throttle(5.0, "Some thresholds for the navgoal is set to zero. This may result in service responding with False")
+
+        at_waypoint = (err <= self.pos_thres 
+                      and err_yaw <= self.yaw_thres 
+                      and vel <= self.vel_thres 
+                      and vel_yaw <= self.vel_yaw_thres)
+        
+        #rospy.loginfo("At goal?: " + str(at_waypoint))
+        self.is_at_goal = at_waypoint
+        return at_waypoint
+
+
+    def goal_callback(self, req):
+        # msg:= goal
+        # RViz's "2D Nav Goal" publishes z=0, so add some altitude if needed.
+        
+        self.is_at_goal = False
+        self.pos_thres = req.pos_thres 
+        self.yaw_thres = req.yaw_thres 
+        self.vel_thres = req.vel_thres 
+        self.vel_yaw_thres = req.vel_yaw_thres
+        self.duration = req.duration
+        msg = req.goal
+
+        if msg.pose.position.z == 0.0 and msg.header.frame_id in ["cf1/odom", "map"]:
+            msg.pose.position.z = 0.5
+
+        goal = msg
+        self.goal = goal
+        # Transform defined frames once
+        if goal.header.frame_id in self.transform_once_frames:
+            # Need to tell TF that the goal was just generated
+            goal.header.stamp = rospy.Time(0)
+            if not self.tf_buf.can_transform(goal.header.frame_id, 'cf1/odom', goal.header.stamp):
+                rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % goal.header.frame_id)
+                return
+
+            goal = self.tf_buf.transform(goal, 'cf1/odom')
+            self.goal = goal
+        
+        rate = rospy.Rate(20)
+        start = time.time()
+        while not rospy.is_shutdown():
+            if self.is_at_goal:
+                return MoveToResponse(Bool(True))
+                
+            if self.duration and float(time.time()-start) > float(self.duration):
+                return MoveToResponse(Bool(self.is_at_goal))
+            rate.sleep()
+    
+
+    def publish_cmd(self, goal):
+        if goal.header.frame_id != "cf1/odom":
+            goal.header.stamp = rospy.Time(0)
+            if not self.tf_buf.can_transform(goal.header.frame_id, 'cf1/odom', goal.header.stamp):
+                rospy.logwarn_throttle(5.0, 'No transform from %s to cf1/odom' % goal.header.frame_id)
+                return
+            goal_odom = self.tf_buf.transform(goal, 'cf1/odom')
+        else:
+            goal_odom = goal
+
+        cmd = Position()
+        cmd.header.stamp = rospy.Time.now()
+        cmd.header.frame_id = goal_odom.header.frame_id
+
+        cmd.x = goal_odom.pose.position.x
+        cmd.y = goal_odom.pose.position.y
+        cmd.z = goal_odom.pose.position.z
+
+        _, _, yaw = euler_from_quaternion((goal_odom.pose.orientation.x,
+                                            goal_odom.pose.orientation.y,
+                                            goal_odom.pose.orientation.z,
+                                            goal_odom.pose.orientation.w))
+
+        cmd.yaw = math.degrees(yaw)
+        self.at_goal_pub.publish(Bool(self.at_goal(goal_odom)))
+        self.pub_cmd.publish(cmd)
+
+    def spin(self):
+        rate = rospy.Rate(20)
+        while not rospy.is_shutdown():
+            if self.goal:
+                self.publish_cmd(self.goal) # send in as arguments so they don't change during call
+            rate.sleep()
+
+
+if __name__ == '__main__':
+    rospy.init_node('navgoal_server')
+    transform_once_frames = ["cf1/base_link", "cf1/camera_link"]
+    n = NavGoalPublisher(transform_once_frames)
+    n.spin()
