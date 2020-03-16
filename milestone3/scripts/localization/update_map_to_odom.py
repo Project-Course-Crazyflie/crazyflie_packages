@@ -12,7 +12,7 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, TwistStamp
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import TransformStamped, Vector3
 from crazyflie_driver.msg import Position
-from aruco_msgs.msg import MarkerArray
+from aruco_msgs.msg import Marker, MarkerArray
 
 
 class KalmanFilter:
@@ -50,21 +50,23 @@ class KalmanFilter:
 class MapOdomUpdate:
     def __init__(self, init_trans, update_freq):
         # TODO: import MarkerArray
-        self.aruco_detect_sub = rospy.Subscriber('/aruco/markers', MarkerArray, self.update_callback)
-        self.cf1_pose_sub = rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
-        self.cf1_pose_cov_pub = rospy.Publisher("cf1/pose_cov", PoseWithCovarianceStamped, queue_size=1)
-        self.cf1_pose_sub = rospy.Subscriber("cf1/velocity", TwistStamped, self.cf1_vel_callback)
+        rospy.Subscriber('/aruco/markers', MarkerArray, self.update_callback)
+        #rospy.Subscriber('cf1/localization/detection', Marker, self.update_callback) # use this instead
+        rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
+        rospy.Subscriber("cf1/velocity", TwistStamped, self.cf1_vel_callback)
+        self.cf1_pose_cov_pub = rospy.Publisher("cf1/localizatiton/pose_cov", PoseWithCovarianceStamped, queue_size=1)
+        self.valid_detection_pub = rospy.Publisher("cf1/localization/valid_detection", Marker, queue_size=1)
 
         init_trans.header.frame_id = "map"
         init_trans.child_frame_id = "cf1/odom"
-        self.init_trans = init_trans
+        self.init_trans = init_trans # remove?
+        self.last_transform = init_trans
 
         self.cf1_pose = None
         self.cf1_vel = None
 
         self.measurement_msg = None
         self.old_msg = None
-        self.last_transform = None
 
         self.tf_buf = tf2_ros.Buffer()
         self.tf_lstn = tf2_ros.TransformListener(self.tf_buf, queue_size=1) # should there be a queue_size?
@@ -74,7 +76,7 @@ class MapOdomUpdate:
         self.update_freq = update_freq
         self.kf = KalmanFilter(initial_cov=np.array([0.01, 0.01, 0.01]), R=np.array([.0005, .0005, .001]), delta_t=1.0/self.update_freq)
         #self.kf = KalmanFilter(initial_cov=np.array([0.1, 0.1, 0.1]), R=np.array([0.005, 1.0, 1.0]), delta_t=1.0/self.update_freq)
-    
+
     def spin(self):
         rate = rospy.Rate(self.update_freq)
         while not rospy.is_shutdown():
@@ -82,15 +84,12 @@ class MapOdomUpdate:
             A = np.diag([1, 1, 1])
             u = [0, 0, 0]
             self.kf.predict(A, u)
+            if self.measurement_msg: 
+                valid_marker = self.update(self.msg_to_measurement(self.measurement_msg))
+                if valid_marker: self.valid_detection_pub.publish(valid_marker)
 
-            if self.measurement_msg: self.update(self.measurement_msg)
-
-            if self.last_transform == None:
-                self.init_trans.header.stamp = rospy.Time.now()
-                self.broadcaster.sendTransform(self.init_trans)
-            else:
-                self.last_transform.header.stamp = rospy.Time.now()
-                self.broadcaster.sendTransform(self.last_transform)
+            self.last_transform.header.stamp = rospy.Time.now()
+            self.broadcaster.sendTransform(self.last_transform)
             
             # determine u by checking if the drone is in motion
             """
@@ -121,8 +120,8 @@ class MapOdomUpdate:
                 p.header = self.cf1_pose.header # correct to use cf1/odom as frame_id???
                 p.pose.pose = self.cf1_pose.pose
                 p.pose.covariance[0] = self.kf.cov[0][0]
-                p.pose.covariance[1] = self.kf.cov[0][0]*self.kf.cov[1][1]
-                p.pose.covariance[6] = self.kf.cov[0][0]*self.kf.cov[1][1]
+                #p.pose.covariance[1] = self.kf.cov[0][0]*self.kf.cov[1][1]
+                #p.pose.covariance[6] = self.kf.cov[0][0]*self.kf.cov[1][1]
                 p.pose.covariance[7] = self.kf.cov[1][1]
                 p.pose.covariance[-1] = self.kf.cov[2][2]
                 self.cf1_pose_cov_pub.publish(p)
@@ -137,17 +136,21 @@ class MapOdomUpdate:
     def update_callback(self, msg):
         self.measurement_msg = msg
 
+    def msg_to_measurement(self, msg):
+        # TODO
+        return msg
+
     def update(self, m_array):
         if self.old_msg == m_array:
             # Message old 
             return
         self.old_msg = m_array
         
-        # TODO: Make possible to update multiple markes?
-        m = m_array.markers[0]
+        # TODO: Make possible to update multiple markers?
+        marker = m_array.markers[0]
 
-        frame_detected = "aruco/detected" + str(m.id)
-        frame_map = "aruco/marker" + str(m.id)
+        frame_detected = "aruco/detected" + str(marker.id)
+        frame_map = "aruco/marker" + str(marker.id)
 
         if not self.tf_buf.can_transform(frame_map, frame_detected, rospy.Time(0)):
             rospy.logwarn_throttle(5.0, 'No transform from {} to {}'.format(frame_map, frame_detected))
@@ -159,10 +162,9 @@ class MapOdomUpdate:
             except: print("walla0")
             else: break
         #detected_to_map_new.header.stamp = rospy.Time.now()
-        print(detected_to_map_new.header.stamp)
         detected_to_map_new.header.frame_id = frame_detected
         detected_to_map_new.child_frame_id = "map_measured"
-        self.static_broadcaster.sendTransform(detected_to_map_new) # Why doesnt it work with the normal broadcaster???
+        self.static_broadcaster.sendTransform(detected_to_map_new) # Don't work with dynamic broadcaster, something with stamps?
 
         # Transform between map and measured map filtered using kalman filter
         while not rospy.is_shutdown():
@@ -173,6 +175,9 @@ class MapOdomUpdate:
             else: break
         Q=[0.1, 0.1, 0.1]
         #Q=[1, 1, 1]
+        if self.outlier(map_to_map_new): 
+            print("Outlier detected!")
+            return None
         map_filtered = self.kalman_filter(map_to_map_new, Q)
         self.broadcaster.sendTransform(map_filtered)
 
@@ -189,12 +194,12 @@ class MapOdomUpdate:
         map_to_odom = map_filtered_to_odom
         map_to_odom.header.stamp = rospy.Time.now()
 
-        rospy.loginfo("Created new transform between map and cf1/odom")
+        #rospy.loginfo("Created new transform between map and cf1/odom")
         self.last_transform = map_to_odom
+        return marker
 
     def kalman_filter(self, transform, Q):
         # TODO: Kalman filter, for now fixed kalman gain
-
         Kx, Ky, K_rot = self.kf.update(Q)
 
         t = transform
@@ -221,6 +226,17 @@ class MapOdomUpdate:
         
         return new_t
         
+    def outlier(self, t):
+        # state = np.array(self.kf.cov,diagonal())
+        # diff = state - measurement
+        s = self.kf.cov
+        diff = np.array([t.transform.translation.x, t.transform.translation.y, t.transform.rotation.z])
+        
+        mahalanobis_dist = np.sqrt(np.matmul(np.matmul(diff.transpose(), np.linalg.inv(s)), diff))
+        print("Mahalanobis dist: {}".format(mahalanobis_dist))
+        return mahalanobis_dist > 2.5
+
+
 if __name__ == '__main__':
     rospy.init_node('update_map_to_odom')
     init_trans_str = rospy.get_param(rospy.get_name() + "/initial_map_to_odom")
@@ -238,5 +254,6 @@ if __name__ == '__main__':
                                                          init_trans_ls[5])
 
 
-    p = MapOdomUpdate(init_trans=init_t, update_freq=20)
+    # update freq should be high (at least > 20 Hz) so transforms don't get extrapolation errors
+    p = MapOdomUpdate(init_trans=init_t, update_freq=100)
     p.spin()
