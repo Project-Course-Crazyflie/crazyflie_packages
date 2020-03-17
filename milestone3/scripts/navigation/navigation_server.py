@@ -128,7 +128,7 @@ class NavigationServer:
             pose = self.tf_buf.transform(pose, 'map')
 
         frame_pose = PoseStamped() # [0, 0, 0]
-        frame_pose.header.stamp = rospy.Time(0)
+        frame_pose.header.stamp = rospy.Time(0) # .now()?
         frame_pose.header.frame_id = target_frame
 
         p = self.tf_buf.transform(frame_pose, 'map')

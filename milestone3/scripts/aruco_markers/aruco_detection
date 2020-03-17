@@ -50,15 +50,15 @@ def publish_cmd(goal):
     #    return
     if last_msg == goal:
         # Allready processed
-        rospy.loginfo("TOO OLD ARUCO_MARKES LIST")
+        #rospy.loginfo("TOO OLD ARUCO_MARKES LIST")
         return
 
-    rospy.loginfo("Transforming " + str(len(goal.markers)) + " markers")
+    #rospy.loginfo("Transforming " + str(len(goal.markers)) + " markers")
     
     transforms = []
     
     for m in goal.markers:
-        rospy.loginfo("ID: " + str(m.id))
+        #rospy.loginfo("ID: " + str(m.id))
         trans_m = transform_from_marker(m)
         transforms.append(trans_m)
 
