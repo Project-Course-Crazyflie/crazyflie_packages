@@ -1,3 +1,7 @@
+#This script creates a link to worlds_json folder where all map files (before conversion) should be.
+#It also copies all map files into there
+#finally the link is added to the git-ignore, as the link won't work for computers with other user names
+
 echo 'creating link, this requires superuser priviliges'
 LINKPATH=~/dd2419_ws/src/crazyflie_packages/milestone3/
 WORLDPATH=~/dd2419_ws/src/course_packages/dd2419_resources/worlds_json
