@@ -1,0 +1,16 @@
+navigation:
+    dist_to_marker: 0.5
+    pos_thres: 0.2      # not used yet
+    yaw_thres: 0.1      # not used yet
+    vel_thres: 0.1      # not used yet
+    vel_yaw_thres: 0.05 # not used yet
+
+localization:
+    R: [0.0005, 0.0005, 0.001]  # not used yet
+    initial_cov: [100, 100, 20] # not used yet
+
+perception:
+    todo: "TODO"
+
+path_planning:
+    todo: "TODILO"

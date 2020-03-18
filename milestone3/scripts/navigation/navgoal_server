@@ -24,7 +24,7 @@ class NavGoalPublisher:
         rospy.Service("cf1/move_to_service", MoveTo, self.goal_callback)
         rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
         rospy.Subscriber("cf1/velocity", TwistStamped, self.cf1_vel_callback)
-        self.pub_cmd = rospy.Publisher("cf1/cmd_position", Position, queue_size=2)
+        self.pub_cmd = rospy.Publisher("cf1/cmd_position", Position, queue_size=1)
         self.at_goal_pub = rospy.Publisher("cf1/at_goal", Bool, queue_size=1)
 
         self.tf_buf = tf2_ros.Buffer()
@@ -57,12 +57,12 @@ class NavGoalPublisher:
         g = np.array([goal_odom.pose.position.x, goal_odom.pose.position.y, goal_odom.pose.position.z])
         curr = np.array([self.cf1_pose.pose.position.x, self.cf1_pose.pose.position.y, self.cf1_pose.pose.position.z])
         
-        yaw_act = euler_from_quaternion([self.cf1_pose.pose.orientation.x, 
+        _,_,yaw_act = euler_from_quaternion([self.cf1_pose.pose.orientation.x, 
                                         self.cf1_pose.pose.orientation.y, 
                                         self.cf1_pose.pose.orientation.z, 
                                         self.cf1_pose.pose.orientation.w])
 
-        yaw_goal = euler_from_quaternion([goal_odom.pose.orientation.x, 
+        _,_,yaw_goal = euler_from_quaternion([goal_odom.pose.orientation.x, 
                                         goal_odom.pose.orientation.y, 
                                         goal_odom.pose.orientation.z, 
                                         goal_odom.pose.orientation.w])
@@ -70,7 +70,7 @@ class NavGoalPublisher:
         
         diff = g-curr
         err = np.linalg.norm(diff)
-        err_yaw = abs((yaw_goal[2]-yaw_act[2] + np.pi) % (2*np.pi) - np.pi)
+        err_yaw = abs((yaw_goal-yaw_act + np.pi) % (2*np.pi) - np.pi)
         if self.cf1_vel:
             vel = np.sqrt(self.cf1_vel.twist.linear.x**2 + self.cf1_vel.twist.linear.y**2)
             vel_yaw = abs(self.cf1_vel.twist.angular.z)
@@ -98,7 +98,7 @@ class NavGoalPublisher:
         self.is_at_goal = False
         self.pos_thres = req.pos_thres 
         self.yaw_thres = req.yaw_thres 
-        self.vel_thres = req.vel_thres 
+        self.vel_thres = req.vel_thres
         self.vel_yaw_thres = req.vel_yaw_thres
         self.duration = req.duration
         msg = req.goal

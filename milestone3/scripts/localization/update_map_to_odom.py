@@ -75,7 +75,7 @@ class MapOdomUpdate:
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster()
        
         self.update_freq = update_freq
-        self.kf = KalmanFilter(initial_cov=np.array([10.01, 10.01, 10.01]), R=np.array([.0005, .0005, .001]), delta_t=1.0/self.update_freq)
+        self.kf = KalmanFilter(initial_cov=np.array([100.01, 100.01, 20.01]), R=np.array([.0005, .0005, .001]), delta_t=1.0/self.update_freq)
         #self.kf = KalmanFilter(initial_cov=np.array([0.1, 0.1, 0.1]), R=np.array([0.005, 1.0, 1.0]), delta_t=1.0/self.update_freq)
 
     def spin(self):

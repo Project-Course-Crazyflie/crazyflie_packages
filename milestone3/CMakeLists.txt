@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
 #  tf
   std_msgs
   geometry_msgs
+  nav_msgs
   message_generation
 )
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
@@ -62,6 +63,7 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
  add_service_files(
    FILES
    MoveTo.srv
+   PlanPath.srv
 #   Service2.srv
  )
 
@@ -77,6 +79,7 @@ generate_messages(
   DEPENDENCIES
    std_msgs
    geometry_msgs
+   nav_msgs
 )
 
 ################################################
