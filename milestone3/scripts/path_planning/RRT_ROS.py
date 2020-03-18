@@ -235,7 +235,7 @@ class RRT:
         for o in obstacles:
             for x,y in zip(node.x_path, node.y_path):
                 dist = o.distance(Point(x,y,0))
-                if dist < 0.4:
+                if dist < 0.13:
                     return False #collision
 
         return True #safe
@@ -272,8 +272,8 @@ def generate_and_publish_obstacles():
     world = json.load(f)
 
     """
-
-    mapFilePath = "../../maps/tutorial_1.world.json"
+    #mapFilePath = "../../maps/tutorial_1.world.json"
+    mapFilePath = rospy.get_param(rospy.get_name() + "/world_name")
     mapString = ""
 
     with open(os.path.join(os.path.dirname(__file__), mapFilePath), "r") as file:
@@ -338,7 +338,7 @@ obstacles_pub = rospy.Publisher('/visualization_marker_array', MarkerArray, queu
 
 #Path
 path_pub = rospy.Publisher('/move_base/TrajectoryPlanner', Path, queue_size=2)
-rospy.Service('/cf1/path_planner/plan', PlanPath, path_callback)
+rospy.Service('/cf1/path_planning/plan', PlanPath, path_callback)
 
 rospy.sleep(2)
 

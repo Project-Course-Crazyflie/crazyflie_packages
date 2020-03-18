@@ -25,5 +25,8 @@
         <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
         <param name="labels" value="$(find milestone2)/scripts/$(arg labels)"/>
     </node>-->
+    <node pkg="milestone3" type="RRT_ROS.py" name="path_planner">
+        <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
+    </node>
 
 </launch>

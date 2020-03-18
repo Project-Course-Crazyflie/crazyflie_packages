@@ -14,6 +14,7 @@ from std_msgs.msg import String, Empty, Int16
 from crazyflie_driver.msg import Position
 
 from milestone3.srv import MoveTo, MoveToResponse, MoveToRequest
+from milestone3.srv import PlanPath, PlanPathResponse, PlanPathRequest
 
 class NavigationServer:
     def __init__(self):
@@ -22,8 +23,9 @@ class NavigationServer:
         self.tf_buf = tf2_ros.Buffer()
         tf2_ros.TransformListener(self.tf_buf)
 
+        self.plath_plan_client = rospy.ServiceProxy('cf1/path_planning/plan', PlanPath)
         self.navgoal_client = rospy.ServiceProxy('cf1/move_to_service', MoveTo)
-        rospy.Subscriber('cf1/navigation/follow_path', PoseArray, self.follow_path_callback)
+        rospy.Subscriber('cf1/navigation/plan_and_follow_path', Int16, self.plan_and_follow_path_callback)
         rospy.Subscriber('move_base_simple/goal', PoseStamped, self.move_to_callback)
         rospy.Subscriber("cf1/navigation/takeoff", Empty, self.takeoff_callback)
         rospy.Subscriber("cf1/navigation/land", Empty, self.land_callback)
@@ -56,11 +58,20 @@ class NavigationServer:
         except rospy.ServiceException as e:
             print("Service call failed: {}".format(e))
 
-    def follow_path_callback(self, pose_array):
-        for p in pose_array.poses:
+    def plan_and_follow_path_callback(self, marker_id):
+        if not self.cf1_pose:
+            print("Need a cf1/pose...")
+            return False
+        marker_id = marker_id.data
+        start_pos = self.cf1_pose
+        end_pos = self.get_marker_goal(marker_id)
+        rospy.wait_for_service('cf1/move_to_service')
+        resp = self.plath_plan_client(start_pos, end_pos)
+        for p in reversed(resp.path.poses):
             # do something with the orientation
-            goal = p
-            self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.05, duration=0)
+            p.pose.orientation = end_pos.pose.orientation
+            self.navgoal_call(p, pos_thres=0.3, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
+        self.navgoal_call(end_pos, pos_thres=0.3, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
 
     def move_to_callback(self, goal):
         # Convenience method to be able to pusblish navgoal via the topic cf1/move_to without using the service
@@ -118,7 +129,9 @@ class NavigationServer:
         print("Spin 3/3: {}".format(r3.data))
 
     def marker_goal_callback(self, marker_id):
+        
         # TODO: make useful for signs as well
+        # Remove and use get_marker_goal instead?
         aruco_frame = "aruco/marker" + str(marker_id.data)
 
         while not self.cf1_pose: rospy.loginfo("Waiting for cf1/pose...")
@@ -167,6 +180,40 @@ class NavigationServer:
 
         resp = self.navgoal_call(goal_map)
         print("Moved to marker {}: {}".format(marker_id.data, resp.data))
+
+    def get_marker_goal(self, marker_id):
+        # TODO: make useful for signs as well
+        aruco_frame = "aruco/marker" + str(marker_id)
+
+        while not self.cf1_pose: rospy.loginfo("Waiting for cf1/pose...")
+
+        if not self.tf_buf.can_transform(aruco_frame, 'map', rospy.Time(0)):
+            rospy.logwarn_throttle(5.0, 'No transform from %s to map' % aruco_frame)
+            return
+
+        aruco_pose = PoseStamped()
+        aruco_pose.header.frame_id = aruco_frame
+        aruco_pose.header.stamp = rospy.Time.now()
+        p0 = self.tf_buf.transform(aruco_pose, "map")
+        aruco_pose.pose.position.y = rospy.get_param("navigation/dist_to_marker")
+        p1 = self.tf_buf.transform(aruco_pose, "map")
+
+        goal = PoseStamped()
+        goal.header.frame_id = aruco_frame
+
+        q = self.yaw_towards_frame(p1, target_frame=aruco_frame, T=None)
+
+        goal_map = PoseStamped()
+        goal_map.header.stamp = rospy.Time.now()
+        goal_map.header.frame_id = "map"
+        goal_map.pose.position.x = p1.pose.position.x
+        goal_map.pose.position.y = p1.pose.position.y
+        goal_map.pose.position.z = p1.pose.position.z # use p0 here to keep the crazyflie on the same height as the aruco marker
+        goal_map.pose.orientation.x = q[0]
+        goal_map.pose.orientation.y = q[1]
+        goal_map.pose.orientation.z = q[2]
+        goal_map.pose.orientation.w = q[3]
+        return goal_map
 
     def yaw_towards_frame(self, pose, target_frame, T=None):
         """Return the yaw towards frame represented in a quaternion (list)
