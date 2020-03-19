@@ -10,11 +10,16 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import PoseArray
 from geometry_msgs.msg import TransformStamped, Vector3
-from std_msgs.msg import String, Empty, Int16
+from std_msgs.msg import String, Empty, Int8, Bool
 from crazyflie_driver.msg import Position
 
-from milestone3.srv import MoveTo, MoveToResponse, MoveToRequest
-from milestone3.srv import PlanPath, PlanPathResponse, PlanPathRequest
+from milestone3.srv import MoveTo, MoveToRequest
+from milestone3.srv import PlanPath, PlanPathResponse
+from milestone3.srv import PlanAndFollowPath, PlanAndFollowPathResponse
+from milestone3.srv import Spin, SpinResponse
+from milestone3.srv import Land, LandResponse
+from milestone3.srv import TakeOff, TakeOffResponse
+from milestone3.srv import MoveToMarker, MoveToMarkerResponse
 
 class NavigationServer:
     def __init__(self):
@@ -25,12 +30,19 @@ class NavigationServer:
 
         self.plath_plan_client = rospy.ServiceProxy('cf1/path_planning/plan', PlanPath)
         self.navgoal_client = rospy.ServiceProxy('cf1/move_to_service', MoveTo)
-        rospy.Subscriber('cf1/navigation/plan_and_follow_path', Int16, self.plan_and_follow_path_callback)
+        
         rospy.Subscriber('move_base_simple/goal', PoseStamped, self.move_to_callback)
-        rospy.Subscriber("cf1/navigation/takeoff", Empty, self.takeoff_callback)
-        rospy.Subscriber("cf1/navigation/land", Empty, self.land_callback)
-        rospy.Subscriber("cf1/navigation/spin", Empty, self.spin_motion_callback)
-        rospy.Subscriber("cf1/navigation/marker_goal", Int16, self.marker_goal_callback)
+        #rospy.Subscriber('cf1/navigation/plan_and_follow_path', Int16, self.plan_and_follow_path_callback)
+        #rospy.Subscriber("cf1/navigation/takeoff", Empty, self.takeoff_callback)
+        #rospy.Subscriber("cf1/navigation/land", Empty, self.land_callback)
+        #rospy.Subscriber("cf1/navigation/spin", Empty, self.spin_motion_callback)
+        #rospy.Subscriber("cf1/navigation/move_to_marker", Int8, self.marker_goal_callback)
+
+        rospy.Service('cf1/navigation/plan_and_follow_path', PlanAndFollowPath, self.plan_and_follow_path_callback)
+        rospy.Service("cf1/navigation/takeoff", TakeOff, self.takeoff_callback)
+        rospy.Service("cf1/navigation/land", Land, self.land_callback)
+        rospy.Service("cf1/navigation/spin", Spin, self.spin_motion_callback)
+        rospy.Service("cf1/navigation/move_to_marker", MoveToMarker, self.marker_goal_callback)
 
     def cf1_pose_callback(self, pose):
         self.cf1_pose = pose
@@ -58,25 +70,27 @@ class NavigationServer:
         except rospy.ServiceException as e:
             print("Service call failed: {}".format(e))
 
-    def plan_and_follow_path_callback(self, marker_id):
+    def plan_and_follow_path_callback(self, req):
+        # TODO: change to just follow path
         if not self.cf1_pose:
             print("Need a cf1/pose...")
             return False
-        marker_id = marker_id.data
         start_pos = self.cf1_pose
-        end_pos = self.get_marker_goal(marker_id)
+        end_pos = self.get_marker_goal(req.marker_id)
         rospy.wait_for_service('cf1/move_to_service')
         resp = self.plath_plan_client(start_pos, end_pos)
         for p in reversed(resp.path.poses):
             # do something with the orientation
             p.pose.orientation = end_pos.pose.orientation
             self.navgoal_call(p, pos_thres=0.3, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
-        self.navgoal_call(end_pos, pos_thres=0.3, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
+        return self.navgoal_call(end_pos, pos_thres=0.3, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
+        
 
-    def move_to_callback(self, goal):
+    def move_to_callback(self, req):
         # Convenience method to be able to pusblish navgoal via the topic cf1/move_to without using the service
-        resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=0.1)
+        resp = self.navgoal_call(req, pos_thres=0.2, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=0.1)
         print("Moving: {}".format(resp.data))
+        return resp
 
     def takeoff_callback(self, _):
         if self.cf1_pose is None or abs(self.cf1_pose.pose.position.z) < 0.1:
@@ -86,8 +100,10 @@ class NavigationServer:
             goal.pose.orientation.w = 1 # this keeps the orientation unchanged!
             resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.1, duration=5)
             print("Takeoff: {}".format(resp.data))
+            return resp
         else:
             print("I'm already flying you greedy pancake!")
+            return TakeOffResponse(Bool(False))
 
     def land_callback(self, _):
         if self.cf1_pose is None or abs(self.cf1_pose.pose.position.z) > 0.1:
@@ -97,8 +113,10 @@ class NavigationServer:
             goal.pose.orientation.w = 1
             resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)
             print("Landing: {}".format(resp.data))
+            return resp
         else:
             print("Are you serious!?")
+            return LandResponse(False)
 
     def spin_motion_callback(self, _):
         # Obviously spins the drone XD
@@ -127,12 +145,13 @@ class NavigationServer:
         # it might take a long time (over 20 sec) for the drone to reach the final orientation in simulation. Could be that its spinning really fast...
         r3 = self.navgoal_call(final_pose, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.1, duration=3.0)
         print("Spin 3/3: {}".format(r3.data))
+        return r3
 
-    def marker_goal_callback(self, marker_id):
+    def marker_goal_callback(self, req):
         
         # TODO: make useful for signs as well
         # Remove and use get_marker_goal instead?
-        aruco_frame = "aruco/marker" + str(marker_id.data)
+        aruco_frame = "aruco/marker" + str(req.marker_id)
 
         while not self.cf1_pose: rospy.loginfo("Waiting for cf1/pose...")
 
@@ -179,7 +198,8 @@ class NavigationServer:
         """
 
         resp = self.navgoal_call(goal_map)
-        print("Moved to marker {}: {}".format(marker_id.data, resp.data))
+        print("Moved to marker {}: {}".format(marker_id, resp.data))
+        return resp
 
     def get_marker_goal(self, marker_id):
         # TODO: make useful for signs as well

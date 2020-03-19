@@ -64,6 +64,12 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
    FILES
    MoveTo.srv
    PlanPath.srv
+   FollowPath.srv
+   Land.srv
+   MoveToMarker.srv
+   Spin.srv
+   TakeOff.srv
+   PlanAndFollowPath.srv
 #   Service2.srv
  )
 
