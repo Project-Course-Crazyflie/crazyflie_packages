@@ -29,15 +29,10 @@ class NavigationServer:
         tf2_ros.TransformListener(self.tf_buf)
 
         self.plath_plan_client = rospy.ServiceProxy('cf1/path_planning/plan', PlanPath)
-        self.navgoal_client = rospy.ServiceProxy('cf1/move_to_service', MoveTo)
-        
-        rospy.Subscriber('move_base_simple/goal', PoseStamped, self.move_to_callback)
-        #rospy.Subscriber('cf1/navigation/plan_and_follow_path', Int16, self.plan_and_follow_path_callback)
-        #rospy.Subscriber("cf1/navigation/takeoff", Empty, self.takeoff_callback)
-        #rospy.Subscriber("cf1/navigation/land", Empty, self.land_callback)
-        #rospy.Subscriber("cf1/navigation/spin", Empty, self.spin_motion_callback)
-        #rospy.Subscriber("cf1/navigation/move_to_marker", Int8, self.marker_goal_callback)
+        self.navgoal_client = rospy.ServiceProxy('cf1/navgoal/move_to', MoveTo)
+        self.stop_pub = rospy.Publisher("cf1/navgoal/stop", Empty, queue_size=1)
 
+        rospy.Subscriber('move_base_simple/goal', PoseStamped, self.move_to_callback)
         rospy.Service('cf1/navigation/plan_and_follow_path', PlanAndFollowPath, self.plan_and_follow_path_callback)
         rospy.Service("cf1/navigation/takeoff", TakeOff, self.takeoff_callback)
         rospy.Service("cf1/navigation/land", Land, self.land_callback)
@@ -49,7 +44,7 @@ class NavigationServer:
 
     def navgoal_call(self, goal, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.05, duration=0):
     #def navgoal_call(self, goal, pos_thres, yaw_thres, vel_thres, vel_yaw_thres, duration):
-        rospy.wait_for_service('cf1/move_to_service')
+        rospy.wait_for_service('cf1/navgoal/move_to')
         try:
             #navgoal_client = rospy.ServiceProxy('cf1/move_to_service', MoveTo)
             req = MoveToRequest()
@@ -72,18 +67,28 @@ class NavigationServer:
 
     def plan_and_follow_path_callback(self, req):
         # TODO: change to just follow path
-        if not self.cf1_pose:
+        start_pos = self.cf1_pose
+        if not start_pos:
             print("Need a cf1/pose...")
             return False
-        start_pos = self.cf1_pose
         end_pos = self.get_marker_goal(req.marker_id)
-        rospy.wait_for_service('cf1/move_to_service')
+        rospy.wait_for_service('cf1/navgoal/move_to')
+        print("Planning")
         resp = self.plath_plan_client(start_pos, end_pos)
-        for p in reversed(resp.path.poses):
+        print("Going")
+        poses = list(reversed(resp.path.poses))
+        for p_curr, p_next in zip(poses, poses[1:]):
             # do something with the orientation
-            p.pose.orientation = end_pos.pose.orientation
-            self.navgoal_call(p, pos_thres=0.3, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
-        return self.navgoal_call(end_pos, pos_thres=0.3, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
+            (p_next.pose.orientation.x,
+             p_next.pose.orientation.y,
+             p_next.pose.orientation.z,
+             p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, p_next)
+             # TODO: currently ignoring if not reached position, change that
+            self.navgoal_call(p_next, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
+        print("End goal")
+        resp = self.navgoal_call(end_pos, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
+        print("Done")
+        return resp
         
 
     def move_to_callback(self, req):
@@ -112,11 +117,15 @@ class NavigationServer:
             goal.pose.position.z = -(self.cf1_pose.pose.position.z)
             goal.pose.orientation.w = 1
             resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)
+            self.stop_pub.publish()
+            #goal.pose.position.z = -10
+            #resp = self.navgoal_call(goal, pos_thres=100, yaw_thres=5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)
+
             print("Landing: {}".format(resp.data))
             return resp
         else:
             print("Are you serious!?")
-            return LandResponse(False)
+            return LandResponse(Bool(False))
 
     def spin_motion_callback(self, _):
         # Obviously spins the drone XD
@@ -169,7 +178,7 @@ class NavigationServer:
         goal = PoseStamped()
         goal.header.frame_id = aruco_frame
 
-        q = self.yaw_towards_frame(p1, target_frame=aruco_frame, T=None)
+        q = self.yaw_towards_frame(p1, target_frame=aruco_frame)
 
         goal_map = PoseStamped()
         goal_map.header.stamp = rospy.Time.now()
@@ -221,7 +230,7 @@ class NavigationServer:
         goal = PoseStamped()
         goal.header.frame_id = aruco_frame
 
-        q = self.yaw_towards_frame(p1, target_frame=aruco_frame, T=None)
+        q = self.yaw_towards_frame(p1, target_frame=aruco_frame)
 
         goal_map = PoseStamped()
         goal_map.header.stamp = rospy.Time.now()
@@ -235,10 +244,9 @@ class NavigationServer:
         goal_map.pose.orientation.w = q[3]
         return goal_map
 
-    def yaw_towards_frame(self, pose, target_frame, T=None):
-        """Return the yaw towards frame represented in a quaternion (list)
+    def yaw_towards_frame(self, pose, target_frame):
+        """Return the yaw towards frame (in map frame) represented in a quaternion (list)
         """
-        # TODO: send in transform T as argument instead of calculating here
         if not self.tf_buf.can_transform(target_frame, 'map', rospy.Time(0)):
             rospy.logwarn_throttle(5.0, 'No transform from %s to map' % target_frame)
             return
@@ -250,12 +258,20 @@ class NavigationServer:
         frame_pose.header.stamp = rospy.Time(0) # .now()?
         frame_pose.header.frame_id = target_frame
 
-        p = self.tf_buf.transform(frame_pose, 'map')
+        frame_pose = self.tf_buf.transform(frame_pose, 'map')
 
-        frame_pos = np.array([p.pose.position.x, p.pose.position.y, p.pose.position.z])
+        return self.yaw_towards_pose(pose, frame_pose)
+
+    def yaw_towards_pose(self, pose, target_pose):
+
+        if pose.header.frame_id != target_pose.header.frame_id:
+            rospy.loginfo("Pose and target pose must have the same frame_id!")
+            return
+
+        target_pos = np.array([target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z])
         curr = np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
 
-        diff = frame_pos-curr
+        diff = target_pos-curr
         theta = np.arctan2(diff[1], diff[0])
 
         q_rot = quaternion_from_euler(0, 0, theta,"sxyz")

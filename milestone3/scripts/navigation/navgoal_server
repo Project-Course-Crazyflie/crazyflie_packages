@@ -7,7 +7,7 @@ import tf2_ros
 import tf2_geometry_msgs
 from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import PoseStamped, TwistStamped
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Empty
 from crazyflie_driver.msg import Position
 
 from milestone3.srv import MoveTo, MoveToResponse, MoveToRequest
@@ -21,10 +21,12 @@ class NavGoalPublisher:
         self.cf1_pose = None
         self.cf1_vel = None
 
-        rospy.Service("cf1/move_to_service", MoveTo, self.goal_callback)
+        rospy.Service("cf1/navgoal/move_to", MoveTo, self.goal_callback)
+        rospy.Subscriber("cf1/navgoal/stop", Empty, self.cmd_stop_callback)
         rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
         rospy.Subscriber("cf1/velocity", TwistStamped, self.cf1_vel_callback)
         self.pub_cmd = rospy.Publisher("cf1/cmd_position", Position, queue_size=1)
+        self.pub_cmd_stop = rospy.Publisher("cf1/cmd_stop", Empty, queue_size=1)
         self.at_goal_pub = rospy.Publisher("cf1/at_goal", Bool, queue_size=1)
 
         self.tf_buf = tf2_ros.Buffer()
@@ -43,6 +45,9 @@ class NavGoalPublisher:
 
     def cf1_vel_callback(self, msg):
         self.cf1_vel = msg
+
+    def cmd_stop_callback(self, _):
+        self.goal = None
 
     def at_goal(self, goal_odom):
         if not self.cf1_pose:
@@ -94,7 +99,6 @@ class NavGoalPublisher:
     def goal_callback(self, req):
         # msg:= goal
         # RViz's "2D Nav Goal" publishes z=0, so add some altitude if needed.
-        
         self.is_at_goal = False
         self.pos_thres = req.pos_thres 
         self.yaw_thres = req.yaw_thres 
@@ -162,6 +166,8 @@ class NavGoalPublisher:
         while not rospy.is_shutdown():
             if self.goal:
                 self.publish_cmd(self.goal) # send in as arguments so they don't change during call
+            else:
+                self.pub_cmd_stop.publish()
             rate.sleep()
 
 

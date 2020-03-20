@@ -75,7 +75,7 @@ class MapOdomUpdate:
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster()
        
         self.update_freq = update_freq
-        self.kf = KalmanFilter(initial_cov=np.array([100.01, 100.01, 20.01]), R=np.array([.0005, .0005, .001]), delta_t=1.0/self.update_freq)
+        self.kf = KalmanFilter(initial_cov=np.array([500.01, 500.01, 100.01]), R=np.array([.0005, .0005, .001]), delta_t=1.0/self.update_freq)
         #self.kf = KalmanFilter(initial_cov=np.array([0.1, 0.1, 0.1]), R=np.array([0.005, 1.0, 1.0]), delta_t=1.0/self.update_freq)
 
     def spin(self):
@@ -148,20 +148,28 @@ class MapOdomUpdate:
         self.old_msg = m_array
         
         # TODO: Make possible to update multiple markers?
-        marker = m_array.markers[0]
-
-        # TODO: make this general (no hardcoded signs)
-        if marker.id > 9:
-            frame_detected = "sign_detected/stop"
-            frame_map = "sign/stop"
-            print("Using stop sign!!!")
-            Q=np.diag([0.5, 0.5, 0.5])
+        #marker = m_array.markers[0]
+        map_to_map_new_transforms = []
+        for marker in m_array.markers:
+            map_to_map_measured = self.get_map_to_map_measured_trans(marker)
             
-        else:
-            frame_detected = "aruco/detected" + str(marker.id)
-            frame_map = "aruco/marker" + str(marker.id)
-            Q=np.diag([0.1, 0.1, 0.1])
+            # TODO: make this general (no hardcoded Qs)
+            if marker.id > 9: 
+                Q = np.diag([0.5, 0.5, 0.5])
+            else: 
+                Q = np.diag([0.1, 0.1, 0.1])
+            if self.outlier(map_to_map_measured, Q): 
+                continue
+            
+            map_filtered = self.kalman_filter(map_to_map_measured, Q)
+            map_to_map_new_transforms.append(map_filtered)
 
+        if not map_to_map_new_transforms:
+            print("Measurements not valid!")
+            return
+        map_filtered = self.average_map_to_map_new(map_to_map_new_transforms)
+
+        """
         if not self.tf_buf.can_transform(frame_map, frame_detected, rospy.Time(0), rospy.Duration(1.0)):
             rospy.logwarn_throttle(5.0, 'No transform from {} to {}'.format(frame_map, frame_detected))
             return
@@ -191,6 +199,8 @@ class MapOdomUpdate:
             print("Outlier detected!")
             return None
         map_filtered = self.kalman_filter(map_to_map_new, Q)
+        """
+        
         self.broadcaster.sendTransform(map_filtered)
 
         # Filtered map to cf1/odom redefines new map to cf1/odom
@@ -208,7 +218,71 @@ class MapOdomUpdate:
 
         #rospy.loginfo("Created new transform between map and cf1/odom")
         self.last_transform = map_to_odom
-        return marker
+
+    def get_map_to_map_measured_trans(self, marker):
+        # TODO: make this general (no hardcoded signs)
+        if marker.id > 9:
+            frame_detected = "sign_detected/stop"
+            frame_map = "sign/stop"
+            print("Using stop sign!!!")
+        else:
+            frame_detected = "aruco/detected" + str(marker.id)
+            frame_map = "aruco/marker" + str(marker.id)
+
+        if not self.tf_buf.can_transform(frame_map, frame_detected, rospy.Time(0), rospy.Duration(1.0)):
+            rospy.logwarn_throttle(5.0, 'No transform from {} to {}'.format(frame_map, frame_detected))
+            return
+
+        # OBS!: Transform between aruco/markedX and aruco/detectedX is not the same as transform between map and map_measured!!! (aruco markers can have different orientation than map)
+        # Transform between marker and map is the same as detected to measured map
+        while not rospy.is_shutdown():
+            try: detected_to_map_measured = self.tf_buf.lookup_transform(frame_map, "map", rospy.Time(0), rospy.Duration(1.0))
+            except: print("walla0")
+            else: break
+        #detected_to_map_new.header.stamp = rospy.Time.now()
+        detected_to_map_measured.header.frame_id = frame_detected
+        detected_to_map_measured.child_frame_id = "map_measured"
+        self.static_broadcaster.sendTransform(detected_to_map_measured) # Don't work with dynamic broadcaster, something with stamps?
+        
+
+        # Transform between map and measured map filtered using kalman filter
+        while not rospy.is_shutdown():
+            try: map_to_map_new = self.tf_buf.lookup_transform("map", "map_measured", rospy.Time(0), rospy.Duration(1.0)) # rospy.Time(0)
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e: 
+                print(e)
+                print("walla1")
+            else: break
+        
+        return map_to_map_new
+
+    def average_map_to_map_new(self, map_to_map_new_transforms):
+        n = len(map_to_map_new_transforms)
+        final_map_to_map_new = TransformStamped()
+        final_map_to_map_new.header = map_to_map_new_transforms[-1].header
+        final_map_to_map_new.header.frame_id = "map"
+        final_map_to_map_new.child_frame_id = "map_filtered"
+        
+        for t in map_to_map_new_transforms:
+            final_map_to_map_new.transform.translation.x += t.transform.translation.x/n
+            final_map_to_map_new.transform.translation.y += t.transform.translation.y/n
+            final_map_to_map_new.transform.translation.z += t.transform.translation.z/n
+            a1, a2, a3 = euler_from_quaternion([t.transform.rotation.x,
+                                               t.transform.rotation.y,
+                                               t.transform.rotation.z,
+                                               t.transform.rotation.w])
+
+            curr1, curr2, curr3 = euler_from_quaternion([final_map_to_map_new.transform.rotation.x,
+                                                         final_map_to_map_new.transform.rotation.y,
+                                                         final_map_to_map_new.transform.rotation.z,
+                                                         final_map_to_map_new.transform.rotation.w])
+
+            new1, new2, new3 = curr1+a1/n, curr2+a2/n, curr3+a3/n
+            qx, qy, qz, qw = quaternion_from_euler(new1, new2, new3)
+            final_map_to_map_new.transform.rotation.x = qx
+            final_map_to_map_new.transform.rotation.y = qy
+            final_map_to_map_new.transform.rotation.z = qz
+            final_map_to_map_new.transform.rotation.w = qw
+        return final_map_to_map_new
 
     def kalman_filter(self, transform, Q):
         # TODO: Kalman filter, for now fixed kalman gain
@@ -222,7 +296,7 @@ class MapOdomUpdate:
         new_t.child_frame_id = "map_filtered"
         new_t.transform.translation.x = Kx*t.transform.translation.x
         new_t.transform.translation.y = Ky*t.transform.translation.y
-        t.transform.translation.z = (Kx+Ky)/2*t.transform.translation.z # Keep z in case aruco markers are ill placed irl
+        t.transform.translation.z = 0.5*t.transform.translation.z # Keep z in case aruco markers are ill placed irl
 
         q = [t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w]
         
