@@ -88,7 +88,7 @@ def main():
 
 				#find the depth of found object(s)
 
-				p.pose.position.z = fy*real_size/(boxes.data[n*i+3])  #adjust function
+				p.pose.position.z = fy*real_size/(boxes.data[n*i+3])  
 				p.pose.position.x = (boxes.data[n*i]-W/2)*p.pose.position.z/fx
 				p.pose.position.y = (boxes.data[n*i+1]-H/2)*p.pose.position.z/fy
 

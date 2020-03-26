@@ -19,6 +19,9 @@
     </node-->
 
     <node pkg="milestone3" type="sign_pose" name="sign_detected"></node>
+        <param name="labels" value="$(arg labels_file)"/>
+        <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
+    </node>
 
     <node pkg="milestone3" type="sign_tf" name="sign_tf">
         <param name="labels" value="$(arg labels_file)"/>
