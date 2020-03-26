@@ -12,7 +12,7 @@ import json
 
 #ROS messages
 from geometry_msgs.msg import PoseStamped, Vector3
-from std_msgs.msg import Header, ColorRGBA
+from std_msgs.msg import Header, ColorRGBA, Bool
 from crazyflie_driver.msg import Position
 from visualization_msgs.msg import Marker, MarkerArray
 from nav_msgs.msg import Path
@@ -49,8 +49,19 @@ def path_callback(req):
     current_start.header.stamp = rospy.Time.now()
    
     start_point = [current_start.pose.position.x, current_start.pose.position.y]
+    rho = rospy.get_param("/path_planning/rho")
+    inflation = rospy.get_param("/path_planning/inflation")
+    try:
+        rrt = RRT(start_point, 
+                  goal_point=[end_pos.pose.position.x, end_pos.pose.position.y], 
+                  obstacles=plot_dilated_walls, 
+                  rho=rho, 
+                  inflation=inflation,
+                  sample_rate=5)
+    except Exception as e:
+        print(e)
+        return PlanPathResponse(Path())
 
-    rrt = RRT(start_point, goal_point=[end_pos.pose.position.x, end_pos.pose.position.y], obstacles=plot_dilated_walls, sample_rate=5)
 
     path = rrt.rrt_planning(animation=False)
 
@@ -94,14 +105,20 @@ class RRT:
             self.parent = None
 
     def __init__(self, start_point, goal_point, obstacles, sample_rate, \
-                 rho=0.5, path_resolution=0.05):
+                 rho, inflation, path_resolution=0.05):
         
         self.start_node = self.RRTnode(start_point[0], start_point[1])
+        self.start_node.x_path = [self.start_node.x]
+        self.start_node.y_path = [self.start_node.y]
+        if not self.safe(self.start_node, obstacles):
+            raise Exception("Start node is not safe!")
         self.goal_node = self.RRTnode(goal_point[0], goal_point[1])
         self.obstacles = obstacles
-        self.min_rand_area = [xlb, ylb]
-        self.max_rand_area = [xub, yub]
+        self.inflation = inflation
+        self.min_rand_area = [xlb + self.inflation, ylb + self.inflation]
+        self.max_rand_area = [xub - self.inflation, yub - self.inflation]
         self.rho = rho
+        self.inflation = inflation
         self.path_resolution = path_resolution
         self. sample_rate = sample_rate
         self.node_list = []
@@ -231,11 +248,10 @@ class RRT:
         if node == None:
             return False
 
-        #TODO fix the damn thing
         for o in obstacles:
             for x,y in zip(node.x_path, node.y_path):
                 dist = o.distance(Point(x,y,0))
-                if dist < 0.13:
+                if dist < self.inflation:
                     return False #collision
 
         return True #safe
@@ -272,6 +288,7 @@ def generate_and_publish_obstacles():
     world = json.load(f)
 
     """
+    global xlb, xub, ylb, yub
     #mapFilePath = "../../maps/tutorial_1.world.json"
     mapFilePath = rospy.get_param(rospy.get_name() + "/world_name")
     mapString = ""
@@ -283,7 +300,8 @@ def generate_and_publish_obstacles():
     
     
     world = ast.literal_eval(mapString)#convert string representation of read file into dictionary through some kind of black magic
-    
+    xlb, ylb = world["airspace"]["min"][:2] 
+    xub, yub = world["airspace"]["max"][:2]
 
     plot_walls_list = []
     plot_dilated_walls = []
