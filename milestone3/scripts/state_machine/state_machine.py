@@ -45,20 +45,27 @@ class StateMachine:
     def run(self):
         state = 0
         while not rospy.is_shutdown():
-            if state == 0: 
+            if state == 0:
+                print("Taking off")
                 self.takeoff_client()
+                print("Localizing")
                 rospy.sleep(5) # check convergence instead
+                
                 state = 1
             if state == 1: 
                 if not self.unchecked_markers:
                     state = 3
                     continue
-                marker = self.unchecked_markers.pop()
+                marker = self.unchecked_markers.pop(0)
                 # do something with resp
+                print("Planning and going to marker {}".format(marker))
                 resp = self.plan_and_follow_path_client(marker)
                 # do something with resp
                 # verify that marker is detected
+                rospy.sleep(1)
+                print("Spinning")
                 resp = self.spin_client()
+                rospy.sleep(1)
 
             if state == 2:
                 # Localize when lost

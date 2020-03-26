@@ -8,11 +8,12 @@ navigation:
 localization:
     R: [0.0005, 0.0005, 0.001]  # not used yet
     initial_cov: [100, 100, 20] # not used yet
-    measurement_config: [true, true, false,   # translation x,y,z
+    measurement_config: [true, true, true,   # translation x,y,z
                          false, false, true] # rotation roll,pitch,yaw
     initial_map_to_odom: [0, 0, 0, 0, 0, 0] # [x,y,z,roll,pitch,yaw]
 perception:
     todo: "TODO"
 
 path_planning:
-    todo: "TODILO"
+    rho: 0.05
+    inflation: 0.05

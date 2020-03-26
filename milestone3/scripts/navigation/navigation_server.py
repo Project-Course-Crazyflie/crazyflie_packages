@@ -68,6 +68,10 @@ class NavigationServer:
     def plan_and_follow_path_callback(self, req):
         # TODO: change to just follow path
         start_pos = self.cf1_pose
+        if not self.tf_buf.can_transform("cf1/odom", 'map', rospy.Time(0)):
+            rospy.logwarn_throttle(5.0, 'No transform from cf1/odom to map')
+            return
+        start_pos = self.tf_buf.transform(start_pos, "map", rospy.Duration(1.0))
         if not start_pos:
             print("Need a cf1/pose...")
             return False
@@ -83,6 +87,7 @@ class NavigationServer:
              p_next.pose.orientation.y,
              p_next.pose.orientation.z,
              p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, p_next)
+            #p_next.pose.orientation = end_pos.pose.orientation # remove
              # TODO: currently ignoring if not reached position, change that
             self.navgoal_call(p_next, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
         print("End goal")
@@ -107,7 +112,7 @@ class NavigationServer:
             print("Takeoff: {}".format(resp.data))
             return resp
         else:
-            print("I'm already flying you greedy pancake!")
+            print("FU!")
             return TakeOffResponse(Bool(False))
 
     def land_callback(self, _):
@@ -154,6 +159,7 @@ class NavigationServer:
         # it might take a long time (over 20 sec) for the drone to reach the final orientation in simulation. Could be that its spinning really fast...
         r3 = self.navgoal_call(final_pose, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.1, duration=3.0)
         print("Spin 3/3: {}".format(r3.data))
+        #print("Spin goal: {}".format(final_pose))
         return r3
 
     def marker_goal_callback(self, req):
@@ -207,7 +213,7 @@ class NavigationServer:
         """
 
         resp = self.navgoal_call(goal_map)
-        print("Moved to marker {}: {}".format(marker_id, resp.data))
+        print("Moved to marker {}: {}".format(req.marker_id, resp.data))
         return resp
 
     def get_marker_goal(self, marker_id):
@@ -263,7 +269,9 @@ class NavigationServer:
         return self.yaw_towards_pose(pose, frame_pose)
 
     def yaw_towards_pose(self, pose, target_pose):
-
+        """
+        Calculates the yaw between pose and target_pose in map
+        """
         if pose.header.frame_id != target_pose.header.frame_id:
             rospy.loginfo("Pose and target pose must have the same frame_id!")
             return
