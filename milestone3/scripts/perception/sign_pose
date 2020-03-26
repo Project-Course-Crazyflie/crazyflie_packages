@@ -4,9 +4,16 @@
 #from cv_bridge import CvBridge, CvBridgeError
 import roslib
 import rospy
+import json
+import tf2_ros
+import tf2_msgs
+import math
+import tf2_geometry_msgs
 from std_msgs.msg import Int32MultiArray
-from geometry_msgs.msg import PoseWithCovariance
+from geometry_msgs.msg import PoseWithCovariance, Vector3
+from tf2_geometry_msgs import PoseStamped 
 from aruco_msgs.msg import MarkerArray, Marker
+from tf.transformations import quaternion_from_euler,euler_from_quaternion
 
 
 boxes_msg = None
@@ -22,6 +29,19 @@ def publish(msg):
 
 	return
 
+def pose_from_sign(m):
+    p = PoseStamped()
+    p.header.frame_id =  'sign/' + m['sign']
+    p.pose.translation = Vector3(*m['pose']['position'])
+    roll, pitch, yaw = m['pose']['orientation']
+    (p.pose.rotation.x,
+     p.pose.rotation.y,
+     p.pose.rotation.z,
+     p.pose.rotation.w) = quaternion_from_euler(math.radians(roll),
+                                                     math.radians(pitch),
+                                                     math.radians(yaw))
+    return p
+
 rospy.init_node("object_poser")
 box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
 pose_pub = rospy.Publisher('sign_pose', MarkerArray, queue_size=10)
@@ -29,8 +49,21 @@ pose_pub = rospy.Publisher('sign_pose', MarkerArray, queue_size=10)
 fy = 220.72391163
 fx = 221.88078347
 real_size = 0.2
-n = 6
-H, W = 446, 332
+H, W = 446, 332  #size of undist images
+
+#get all the signs in the map
+w_name = rospy.get_param(rospy.get_name() + "/world_name")
+with open(w_name, 'rb') as f:
+	world = json.load(f)
+signs = [s for s in world['roadsigns']['sign']]
+
+labels = rospy.get_param(rospy.get_name() + '/labels')
+LABELS = open(labels).read().strip().split("\n")
+
+tfBuffer = tf2_ros.Buffer()
+listener = tf2_ros.TransformListener(tfBuffer)
+
+
 
 def main():
 	global boxes_msg
@@ -38,30 +71,61 @@ def main():
 	while not rospy.is_shutdown():
 		if boxes_msg:
 			boxes = boxes_msg
+			n = boxes.layout.dim[1].size  #7: [centerX, centerY, id(14 now), height, width, stamp, stamp_ns]
 			boxes_msg = None
-			#find the depth of found object(s)
-
-
+			#classes = []  #to store the classes of the signs
+			#trans = []
 			#calculate the complete pose of the object(s)
 			markers = []
 			for i in range(boxes.layout.dim[0].size):
 				m = Marker()
-
+				m_class = LABELS[boxes.data[n*i+2]]
 				#TODO: calculate covariance
 				p = PoseWithCovariance()
 				m.header.frame_id = "cf1/camera_link"
-				m.header.stamp.secs = boxes.data[n*i+4]
-				m.header.stamp.nsecs = boxes.data[n*i+5]
+				m.header.stamp.secs = boxes.data[n*i+5]
+				m.header.stamp.nsecs = boxes.data[n*i+6]
+
+				#find the depth of found object(s)
 
 				p.pose.position.z = fy*real_size/(boxes.data[n*i+3])  #adjust function
 				p.pose.position.x = (boxes.data[n*i]-W/2)*p.pose.position.z/fx
 				p.pose.position.y = (boxes.data[n*i+1]-H/2)*p.pose.position.z/fy
-				p.pose.orientation.w = 1
 
+				#find orientation (2 possible, + or -)
+				yaw_detected.append(math.pi/2 - math.asin(boxes.data[n*i+4]/real_size)) #value between pi/2 and 0
+				 
+				#check if the sign_detected is in the map
+				if m_class in signs:
+					#Transform the map pose of the sign_detected in the same frame
+					try:
+						trans = tfBuffer.lookup_transform("cf1/camera_link", 'sign/' + m_class, rospy.Time())
+					except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+						rate.sleep()
+						continue
+
+					if len(trans)!=0: #shouldn't be a problem here 
+						yaw_map = euler_from_quaternion(trans[-1].transform.rotation)[0]
+						if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected :
+							yaw_detected = -yaw_detected
+							
+						roll, pitch, yaw = yaw_detected, 90, 0  #weird axis definition.. 
+						(p.pose.rotation.x,
+    					 p.pose.rotation.y,
+    					 p.pose.rotation.z,
+    					 p.pose.rotation.w) = quaternion_from_euler(math.radians(roll),
+                                                    					 math.radians(pitch),
+                                                    					 math.radians(yaw))
+						
+						#CAN ALSO FIND COV HERE!!!!
+
+						
+				else:
+					rospy.loginfo("Such sign does not exist in the map")
 
 				m.pose = p
 				markers.append(m)
-
+				
 			pose_marker = MarkerArray()
 			pose_marker.header.frame_id = "cf1/camera_link"
 			pose_marker.header.stamp = rospy.Time.now()
