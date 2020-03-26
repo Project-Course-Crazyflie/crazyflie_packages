@@ -93,7 +93,7 @@ def main():
 				p.pose.position.y = (boxes.data[n*i+1]-H/2)*p.pose.position.z/fy
 
 				#find orientation (2 possible, + or -)
-				yaw_detected.append(math.pi/2 - math.asin(boxes.data[n*i+4]/real_size)) #value between pi/2 and 0
+				yaw_detected = math.pi/2 - math.asin(boxes.data[n*i+4]/real_size) #value between pi/2 and 0
 				 
 				#check if the sign_detected is in the map
 				if m_class in signs:

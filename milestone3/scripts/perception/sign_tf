@@ -73,6 +73,9 @@ def main():
 				p.pose.position.y = (boxes.data[n*i+1]-H/2)*p.pose.position.z/fy
 				
 				m_class = labels[boxes.data[n*i+2]]
+				yaw_detected = math.pi/2 - math.asin(boxes.data[n*i+4]/real_size) #value between pi/2 and 0
+
+
 				#find orientation:
 				if m_class in signs: #if it exist in the map
 					#Transform the map pose of the sign_detected in the same frame
@@ -87,7 +90,7 @@ def main():
 						if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected :
 							yaw_detected = -yaw_detected
 							
-						roll, pitch, yaw = yaw_detected, 90, 0  #weird axis definition.. 
+						roll, pitch, yaw = yaw_detected + 90, 90, 0  #weird axis definition..  +90??
 						(p.pose.orientation.x,
     					 p.pose.orientation.y,
     					 p.pose.orientation.z,
