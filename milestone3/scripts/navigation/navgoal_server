@@ -86,10 +86,10 @@ class NavGoalPublisher:
         if 0 in [self.pos_thres, self.yaw_thres, self.vel_thres, self.vel_yaw_thres]:
             rospy.logwarn_throttle(5.0, "Some thresholds for the navgoal is set to zero. This may result in service responding with False")
 
-        at_waypoint = (err <= self.pos_thres 
-                      and err_yaw <= self.yaw_thres 
-                      and vel <= self.vel_thres 
-                      and vel_yaw <= self.vel_yaw_thres)
+        at_waypoint = ((err <= self.pos_thres if self.pos_thres else True)
+                      and (err_yaw <= self.yaw_thres if self.yaw_thres else True)
+                      and (vel <= self.vel_thres if self.vel_thres else True)
+                      and (vel_yaw <= self.vel_yaw_thres if self.vel_yaw_thres else True))
         
         #rospy.loginfo("At goal?: " + str(at_waypoint))
         self.is_at_goal = at_waypoint

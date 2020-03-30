@@ -1,0 +1,28 @@
+{
+
+  "airspace": {
+    "min": [-4, -2, 0.0],
+    "max": [ 2,  2, 2.0]
+  },
+
+  "gate_size": [0.40, 0.40],
+  "marker_size": [0.197, 0.197],
+  "roadsign_size": [0.20, 0.20],
+
+  "gates": [],
+  "walls": [],
+  "roadsigns": [],
+
+  "markers": [
+    {"id": 1, "pose": {"position": [-1, 0, 1.5], "orientation": [180, 0, 0]}},
+    {"id": 2, "pose": {"position": [-5, 0, 1.5], "orientation": [0, 90, -90]}},
+    {"id": 3, "pose": {"position": [-5, 0.3, 1.5], "orientation": [0, 90, -90]}},
+    {"id": 4, "pose": {"position": [-5, -0.3, 1.5], "orientation": [0, 90, -90]}},
+    {"id": 5, "pose": {"position": [-10, 0, 1.5], "orientation": [180, 0, 0]}},
+    {"id": 6, "pose": {"position": [-20, 0, 1.5], "orientation": [180, 0, 0]}},
+    {"id": 7, "pose": {"position": [2, 0, 1.5], "orientation": [0, 90, -90]}}
+
+
+
+  ]
+}

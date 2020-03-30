@@ -209,6 +209,7 @@ class MapOdomUpdate:
 
                 marker_to_detected = self.get_marker_to_detected(frame_marker, frame_detected) # for translation
                 if not marker_to_detected:
+                    print("wallas")
                     continue
                 time_stamp = marker_to_detected.header.stamp
 
