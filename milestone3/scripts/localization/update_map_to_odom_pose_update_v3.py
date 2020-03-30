@@ -262,8 +262,8 @@ class MapOdomUpdate:
         if maha_dist > 0.7:
             # outlier
             print("Outlier")
-            #self.is_measuring = False
-            #return
+            self.is_measuring = False
+            return
 
         K = self.kf.kalman_gain(Q)
         #print(K)

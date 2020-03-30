@@ -110,11 +110,12 @@ class RRT:
         self.start_node = self.RRTnode(start_point[0], start_point[1])
         self.start_node.x_path = [self.start_node.x]
         self.start_node.y_path = [self.start_node.y]
+        self.inflation = inflation
         if not self.safe(self.start_node, obstacles):
             raise Exception("Start node is not safe!")
         self.goal_node = self.RRTnode(goal_point[0], goal_point[1])
         self.obstacles = obstacles
-        self.inflation = inflation
+        
         self.min_rand_area = [xlb + self.inflation, ylb + self.inflation]
         self.max_rand_area = [xub - self.inflation, yub - self.inflation]
         self.rho = rho
@@ -243,8 +244,7 @@ class RRT:
                     return False #collision
         return True #safe
 
-    @staticmethod
-    def safe(node, obstacles):
+    def safe(self, node, obstacles):
         if node == None:
             return False
 

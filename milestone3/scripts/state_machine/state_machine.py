@@ -39,7 +39,7 @@ class StateMachine:
         self.move_to_marker_client = rospy.ServiceProxy("cf1/navigation/move_to_marker", MoveToMarker)
 
         self.checked_markers = []
-        self.unchecked_markers = [0, 1, 2]
+        self.unchecked_markers = [2, 3, 4]
         self.current_state = None
         
     def run(self):
@@ -58,8 +58,15 @@ class StateMachine:
                     continue
                 marker = self.unchecked_markers.pop(0)
                 # do something with resp
-                print("Planning and going to marker {}".format(marker))
-                resp = self.plan_and_follow_path_client(marker)
+                print("Planning to marker {}".format(marker))
+                while True:
+                    try:
+                        resp = self.plan_and_follow_path_client(marker)
+                    except:
+                        print("Failed to plan...")
+                    else:
+                        break
+                print("Going to marker {}".format(marker))
                 # do something with resp
                 # verify that marker is detected
                 rospy.sleep(1)

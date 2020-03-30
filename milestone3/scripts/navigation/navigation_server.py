@@ -79,6 +79,10 @@ class NavigationServer:
         rospy.wait_for_service('cf1/navgoal/move_to')
         print("Planning")
         resp = self.plath_plan_client(start_pos, end_pos)
+        if not len(resp.path.poses): 
+            print("No path found!")
+            return
+
         print("Going")
         poses = list(reversed(resp.path.poses))
         for p_curr, p_next in zip(poses, poses[1:]):
@@ -89,7 +93,7 @@ class NavigationServer:
              p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, p_next)
             #p_next.pose.orientation = end_pos.pose.orientation # remove
              # TODO: currently ignoring if not reached position, change that
-            self.navgoal_call(p_next, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
+            self.navgoal_call(p_next, pos_thres=0.1, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
         print("End goal")
         resp = self.navgoal_call(end_pos, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=3)
         print("Done")
