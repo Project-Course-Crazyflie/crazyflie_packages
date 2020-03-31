@@ -55,7 +55,7 @@ H, W = 446, 332  #size of undist images
 w_name = rospy.get_param(rospy.get_name() + "/world_name")
 with open(w_name, 'rb') as f:
 	world = json.load(f)
-signs = [s for s in world['roadsigns']['sign']]
+signs = [s['sign'] for s in world['roadsigns']]
 
 labels = rospy.get_param(rospy.get_name() + '/labels')
 LABELS = open(labels).read().strip().split("\n")
