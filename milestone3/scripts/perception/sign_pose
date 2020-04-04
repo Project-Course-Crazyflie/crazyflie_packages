@@ -109,7 +109,7 @@ def main():
 						if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected :
 							yaw_detected = -yaw_detected
 							
-						roll, pitch, yaw = yaw_detected, 90, 0  #weird axis definition.. 
+						roll, pitch, yaw = 0,0,yaw_detected  #not exxxcatly the orientation, assuming z axis pointing up
 						(p.pose.rotation.x,
     					 p.pose.rotation.y,
     					 p.pose.rotation.z,
