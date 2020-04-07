@@ -110,7 +110,7 @@ class MapOdomUpdate:
        
         self.update_freq = update_freq
         #self.kf = KalmanFilter(initial_cov=np.array([100000000.01, 100000000.01, 100000000.01]), R=np.array([.0005, .0005, .001]), delta_t=1.0/self.update_freq)
-        self.kf = KalmanFilter(initial_cov=np.array([100000000.01, 100000000.01, 100000000.01, 100000000.01, 100000000.01, 100000000.01]), R=np.array([.0001, .0001, .0001, .0001, .0001, .0001]), delta_t=1.0/self.update_freq)
+        self.kf = KalmanFilter(initial_cov=np.array([100000000.01, 100000000.01, 100000000.01, 100000000.01, 100000000.01, 100000000.01]), R=np.array([.001, .001, .001, .001, .001, .001]), delta_t=1.0/self.update_freq)
 
         self.odom_new_pub = rospy.Publisher("cf1/pose/odom_new", PoseStamped, queue_size=1)
         self.believed_pub = rospy.Publisher("cf1/pose/believed", PoseStamped, queue_size=1)
@@ -262,8 +262,8 @@ class MapOdomUpdate:
         if maha_dist > 0.7:
             # outlier
             print("Outlier")
-            self.is_measuring = False
-            return
+            #self.is_measuring = False
+            #return
 
         K = self.kf.kalman_gain(Q)
         #print(K)
@@ -323,7 +323,13 @@ class MapOdomUpdate:
         t.transform.translation = Vector3(*[odom_new_in_map.pose.position.x, 
                                             odom_new_in_map.pose.position.y, 
                                             odom_new_in_map.pose.position.z])
-        t.transform.rotation = odom_new_in_map.pose.orientation
+        
+        # This is to prevent denormalized quaternion error, dont know why it happens (but seems to be caused 
+        # by the use of the cf1/base_link/projection frame)
+        q = odom_new_in_map.pose.orientation
+        d = np.sqrt(q.x**2 + q.y**2 + q.z**2 + q.w**2)
+        q.x, q.y, q.z, q.w = q.x/d, q.y/d, q.z/d, q.w/d
+        t.transform.rotation = q
         return t
 
     def get_odom_new_pose(self, believed_pose):
@@ -368,14 +374,14 @@ class MapOdomUpdate:
         
         try:
             # the wait here helps alot, or does it?
-            pose_in_detected = self.tf_buf.transform(believed_pose, detected_map_frame)
+            pose_in_detected = self.tf_buf.transform(believed_pose, detected_map_frame, rospy.Duration(0.1))
         except:
             print("f1")
             return
         pose_in_marker = pose_in_detected
         pose_in_marker.header.frame_id = marker_map_frame
         try:
-            measured_pose = self.tf_buf.transform(pose_in_marker, believed_pose.header.frame_id)
+            measured_pose = self.tf_buf.transform(pose_in_marker, believed_pose.header.frame_id, rospy.Duration(0.1))
         except:
             print("f2")
             return
