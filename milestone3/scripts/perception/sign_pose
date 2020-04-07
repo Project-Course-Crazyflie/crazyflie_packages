@@ -55,7 +55,7 @@ H, W = 446, 332  #size of undist images
 w_name = rospy.get_param(rospy.get_name() + "/world_name")
 with open(w_name, 'rb') as f:
 	world = json.load(f)
-signs = [s for s in world['roadsigns']['sign']]
+signs = [s['sign'] for s in world['roadsigns']]
 
 labels = rospy.get_param(rospy.get_name() + '/labels')
 LABELS = open(labels).read().strip().split("\n")
@@ -109,7 +109,7 @@ def main():
 						if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected :
 							yaw_detected = -yaw_detected
 							
-						roll, pitch, yaw = yaw_detected, 90, 0  #weird axis definition.. 
+						roll, pitch, yaw = 0,0,yaw_detected  #not exxxcatly the orientation, assuming z axis pointing up
 						(p.pose.rotation.x,
     					 p.pose.rotation.y,
     					 p.pose.rotation.z,

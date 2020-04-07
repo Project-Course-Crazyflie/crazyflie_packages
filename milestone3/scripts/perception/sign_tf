@@ -39,7 +39,7 @@ H, W = 446, 332  #size of undist images
 w_name = rospy.get_param(rospy.get_name() + "/world_name")
 with open(w_name, 'rb') as f:
 	world = json.load(f)
-signs = [s for s in world['roadsigns']['sign']]
+signs = [s['sign'] for s in world['roadsigns']]
 
 
 label_file_name = rospy.get_param(rospy.get_name() + '/labels')
@@ -74,11 +74,12 @@ def main():
 				
 				m_class = labels[boxes.data[n*i+2]]
 				yaw_detected = math.pi/2 - math.asin(boxes.data[n*i+4]/real_size) #value between pi/2 and 0
-
+				
+				rospy.loginfo('yaw detected : {}'.format(yaw_detected))
 
 				#find orientation:
 				if m_class in signs: #if it exist in the map
-					#Transform the map pose of the sign_detected in the same frame
+					#Transform the map pose of the sign in the same frame
 					try:
 						trans = tf_buf.lookup_transform("cf1/camera_link", 'sign/' + m_class, rospy.Time())
 					except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
@@ -86,11 +87,11 @@ def main():
 						continue
 
 					if len(trans)!=0: #shouldn't be a problem here 
-						yaw_map = euler_from_quaternion(trans[-1].transform.rotation)[0]
+						yaw_map = euler_from_quaternion(trans[-1].transform.rotation)[0] #x axis upwards for the signs
 						if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected :
 							yaw_detected = -yaw_detected
 							
-						roll, pitch, yaw = yaw_detected + 90, 90, 0  #weird axis definition..  +90??
+						roll, pitch, yaw = yaw_detected, -3.14/2, 3.14/2  #weird axis definition..  +90??
 						(p.pose.orientation.x,
     					 p.pose.orientation.y,
     					 p.pose.orientation.z,
