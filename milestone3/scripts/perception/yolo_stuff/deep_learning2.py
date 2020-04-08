@@ -91,40 +91,27 @@ def main():
 
 				# Apply NMS
 				pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
-				"""
-				cboxes = []
-				for output in layerOutputs:
-					# loop over each of the detections
-					for detection in output:
-						# extract the class ID and confidence (i.e., probability) of
-						# the current object detection
-						scores = detection[5:]
-						classID = 11#np.argmax(scores)
-						conf = scores[classID]#detection[4]#
-						# filter out weak predictions by ensuring the detected
-						# probability is greater than the minimum probability
-						if conf > confidence:# and detection[classID] > 0.5:
-							# scale the bounding box coordinates back relative to the
-							# size of the image, keeping in mind that YOLO actually
-							# returns the center (x, y)-coordinates of the bounding
-							# box followed by the boxes' width and height
-							box = detection[0:4] * np.array([W, H, W, H])
-							(centerX, centerY, width, height) = box.astype(np.int32)
-							# use the center (x, y)-coordinates to derive the top and
-							# and left corner of the bounding box
-							x = int(centerX - (width / 2))
-							y = int(centerY - (height / 2))
-							# update our list of bounding box coordinates, confidences,
-							# and class IDs
-							boxes.append([x, y, int(width), int(height)])
-							#14 is the magic number
-							#
-							###
-							#
-							#
-							#
-							cboxes.extend([centerX, centerY, 14, height, stamp, stamp_ns])
-				"""
+
+				cboxes = [] #same as boxes but retaining the centered coordinates
+
+				for detection in pred:
+					# extract the class ID and confidence (i.e., probability) of
+					# the current object detection
+					scores = detection[5:]
+					classID = np.argmax(scores)
+					conf = scores[classID]#detection[4]#
+					# filter out weak predictions by ensuring the detected
+					# probability is greater than the minimum probability
+					if conf > confidence:# and detection[classID] > 0.5:
+						# scale the bounding box coordinates back relative to the
+						# size of the image, keeping in mind that YOLO actually
+						# returns the center (x, y)-coordinates of the bounding
+						# box followed by the boxes' width and height
+						box = detection[0:4] * np.array([W, H, W, H])
+						(centerX, centerY, width, height) = box.astype(np.int32)
+
+						cboxes.extend([centerX, centerY, classID, height, width, stamp, stamp_ns])
+
 				detected = False
 				# Process detections
 				for i, det in enumerate(pred):  # detections per image
