@@ -31,7 +31,7 @@ def img_publish(img):
 def box_publish(boxes):
 	msg = Int32MultiArray()
 	msg.layout.dim = [MultiArrayDimension(),MultiArrayDimension()]
-	n = 6
+	n = 7
 	msg.layout.dim[0].label  = "n_boxes"
 	msg.layout.dim[0].size   = len(boxes)/n
 	msg.layout.dim[0].stride = len(boxes)
@@ -133,7 +133,7 @@ def main():
 						#
 						#
 						#
-						cboxes.extend([centerX, centerY, 14, height, stamp, stamp_ns])
+						cboxes.extend([centerX, centerY, 14, height, width, stamp, stamp_ns])
 						confidences.append(float(conf))
 						classIDs.append(classID)
 

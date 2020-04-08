@@ -24,7 +24,7 @@ import tf2_ros
 
 #Plotting in Python
 import ast
-from shapely.geometry import LineString, box, Polygon
+from shapely.geometry import LineString, box, Polygon, Point
 import matplotlib.pyplot as plt
 
 
@@ -55,7 +55,7 @@ class RRT:
             self.parent = None
 
     def __init__(self, start_point, goal_point, obstacles, sample_rate, \
-                 rho=0.9, path_resolution=0.1):
+                 rho=0.5, path_resolution=0.1):
         
         self.start_node = self.RRTnode(start_point[0], start_point[1])
         self.goal_node = self.RRTnode(goal_point[0], goal_point[1])
@@ -171,7 +171,7 @@ class RRT:
         #outer points of the polygon
         for o in self.obstacles:
             xx, yy = o.exterior.xy
-            plt.fill(xx, yy)
+            plt.scatter(xx, yy)
 
         plt.plot(self.start_node.x, self.start_node.y, "xr")
         plt.plot(self.goal_node.x, self.goal_node.y, "xr")
@@ -191,7 +191,7 @@ class RRT:
         return distance_g
 
     @staticmethod
-    def safe(node, obstacles):
+    def safe_old(node, obstacles):
         if node == None:
             return False
 
@@ -201,12 +201,27 @@ class RRT:
             for (xx, yy) in zip(o_list[0], o_list[1]):
                 distx_list = [xx - x for x in node.x_path]
                 disty_list = [yy - y for y in node.y_path]
-                dist_list = [distx**2 + disty**2 for(distx, disty) in zip(distx_list, disty_list)]
+                dist_list = [math.sqrt(distx**2 + disty**2) for(distx, disty) in zip(distx_list, disty_list)]
 
-                if min(dist_list) < 0.7**2:
+                if min(dist_list) < 0.4:
                     return False #collision
 
         return True #safe
+
+    @staticmethod
+    def safe(node, obstacles):
+        if node == None:
+            return False
+
+        #TODO fix the damn thing
+        for o in obstacles:
+            for x,y in zip(node.x_path, node.y_path):
+                dist = o.distance(Point(x,y))
+                if dist < 0.4:
+                    return False #collision
+
+        return True #safe
+
 
     @staticmethod
     def distance_and_angle(from_node, to_node):

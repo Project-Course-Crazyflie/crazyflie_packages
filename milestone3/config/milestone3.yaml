@@ -1,0 +1,19 @@
+navigation:
+    dist_to_marker: 0.5
+    pos_thres: 0.2      # not used yet
+    yaw_thres: 0.1      # not used yet
+    vel_thres: 0.1      # not used yet
+    vel_yaw_thres: 0.05 # not used yet
+
+localization:
+    R: [0.0005, 0.0005, 0.001]  # not used yet
+    initial_cov: [100, 100, 20] # not used yet
+    measurement_config: [true, true, false,   # translation x,y,z
+                         false, false, true] # rotation roll,pitch,yaw
+    initial_map_to_odom: [2, 2, 0, 0, 0, 1.57] # [x,y,z,roll,pitch,yaw]
+perception:
+    todo: "TODO"
+
+path_planning:
+    rho: 0.2
+    inflation: 0.05

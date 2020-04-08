@@ -7,7 +7,17 @@ project(milestone3)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED)
+#find_package(catkin REQUIRED)
+find_package(catkin REQUIRED COMPONENTS
+#  roscpp
+#  rospy
+#  tf
+  std_msgs
+  geometry_msgs
+  nav_msgs
+  message_generation
+)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -50,11 +60,18 @@ find_package(catkin REQUIRED)
 # )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
+ add_service_files(
+   FILES
+   MoveTo.srv
+   PlanPath.srv
+   FollowPath.srv
+   Land.srv
+   MoveToMarker.srv
+   Spin.srv
+   TakeOff.srv
+   PlanAndFollowPath.srv
 #   Service2.srv
-# )
+ )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -64,10 +81,12 @@ find_package(catkin REQUIRED)
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs  # Or other packages containing msgs
-# )
+generate_messages(
+  DEPENDENCIES
+   std_msgs
+   geometry_msgs
+   nav_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -100,8 +119,12 @@ find_package(catkin REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES milestone3
-#  CATKIN_DEPENDS other_catkin_pkg
+#  LIBRARIES crazyflie
+  CATKIN_DEPENDS
+    message_runtime
+    std_msgs
+#    tf
+#    crazyflie_cpp
 #  DEPENDS system_lib
 )
 

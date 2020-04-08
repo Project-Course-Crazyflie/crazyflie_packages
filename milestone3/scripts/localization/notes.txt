@@ -1,0 +1,28 @@
+Methods tried for localization:
+1. Map to map measured
+By using the transform between map and map measured (map according to marker detection) as object for filtering, the translation and rotation are deåendent and the translation between map and map measured is not necessarily the translation we want. Measurements far from map origin become noisy.
+2. Filtering transform between marker and detected marker in marker frame
+By using the translation and rotation from marker to marker detected the filtering gains depend on the rotation of the marker. The uncertainties in the kalman filter can therefore not be represented generally since markers usually don't have the same orientation.
+3. Filtering transform between marker and detected marker in map frame
+Translation is received by transforming the translation from marker to marker detected to the map frame. The orientation is the rotation between map and map measured. We create a frame which has its origin of marker_origin+filtered_translation, defined in map frame. This frame has the rotation defined by the rotation between map and map measured and from this frame we can calculate where the filtered/new map is.
+The map frame is basically moved with the translation defined between marker and marker detected and the it is repositioned by rotating the map around the filtered marker position. This will not necessarily move the pose of the drone towards the "measured pose". It is more of localizing the marker position instead, but it works well.
+4. Using poses
+The detected pose can be obtained by using the transform from the detected marker to base_link. The transform between the map marker and the measured pose is the same transform. Hard part here is to figure out the measured pose in the case of not all state variables are used and you want to account for small missplacements/missalignments of the aruco markers. For example: if only x,y,yaw is the desired state variables here is a solution to find the "measured" pose, taking misplaced aruco markers into account:
+The orientation of the measured pose, obtained as described above, can be transformed to map frame and will be the "measured" orientation. This orientation can then be filtered exluding the roll/pitch angles. However the x,y position might be wrong if the marker is misplaced. How?
+
+     	| meas
+        v
+      
+       
+       |_ mark    
+                       
+           det  _
+               |     <-- base    
+                  
+        
+Here we can see that the measured position aligns with the marker position which is not wanted (this is an extreme case and wont happen in our case but it illustrates the problem). Solution:
+Create two frame with origin in marker and detected respectively. The orientation of the frame in the detected frame is the same as of base_link and the orientation of the frame with origin in the marker frame has the orientation of the "measured" pose. These orientations should also be filtered (remove roll/pitch). Now, instead of doing like before (taking the transform from detected to base link to define the transform from mark to measured) we can take the transform from the new frame with the origin in the detected frame, to base_link, which will define the transform from the other new frame with origin in the marker frame, to the actual "measured" pose. NOTE: if z (or x,y) is to be excluded from the measurement, the base pose should be filtered (remove z etc.) and the perform the transform calculations.
+                  
+
+5. Poses v2 and v3
+Shit, used odom to baselink (odometry position) for calculations. Changed both to use to use map instead (doesnt seem to be a difference) and v3 is using other order of marker/detected map reference frames to calculate orientation between map and detected map (similar to marker update). MAYBE the roll pitch rotation will be correct if the update of map to odom is done by using map as reference frame? (shouldnt make a difference, right?)

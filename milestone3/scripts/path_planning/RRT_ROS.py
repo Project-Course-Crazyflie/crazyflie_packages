@@ -12,10 +12,11 @@ import json
 
 #ROS messages
 from geometry_msgs.msg import PoseStamped, Vector3
-from std_msgs.msg import Header, ColorRGBA
+from std_msgs.msg import Header, ColorRGBA, Bool
 from crazyflie_driver.msg import Position
 from visualization_msgs.msg import Marker, MarkerArray
 from nav_msgs.msg import Path
+from milestone3.srv import PlanPath, PlanPathResponse
 
 #TF
 from tf.transformations import * 
@@ -24,7 +25,7 @@ import tf2_ros
 
 #Plotting with matplotlib
 import ast
-from shapely.geometry import LineString, box, Polygon
+from shapely.geometry import LineString, box, Polygon, Point
 
 
 
@@ -37,20 +38,30 @@ animation = True
 plot_dilated_walls = []
 
 
-def path_callback(path_msg):
+def path_callback(req):
+    start_pos, end_pos = req.start_pos, req.end_pos
     global plot_dilated_walls
     
     path_array = Path()
     path_array.header.frame_id = 'map'
 
-    current_start = path_msg
+    current_start = start_pos
     current_start.header.stamp = rospy.Time.now()
    
     start_point = [current_start.pose.position.x, current_start.pose.position.y]
+    rho = rospy.get_param("/path_planning/rho")
+    inflation = rospy.get_param("/path_planning/inflation")
+    try:
+        rrt = RRT(start_point, 
+                  goal_point=[end_pos.pose.position.x, end_pos.pose.position.y], 
+                  obstacles=plot_dilated_walls, 
+                  rho=rho, 
+                  inflation=inflation,
+                  sample_rate=5)
+    except Exception as e:
+        print(e)
+        return PlanPathResponse(Path())
 
-    generate_and_publish_obstacles()
-    print(plot_dilated_walls)
-    rrt = RRT(start_point, goal_point=[7.0, 4.0], obstacles=plot_dilated_walls, sample_rate=5)
 
     path = rrt.rrt_planning(animation=False)
 
@@ -69,6 +80,9 @@ def path_callback(path_msg):
 
             path_array.poses.append(point)
         path_pub.publish(path_array)
+        resp = PlanPathResponse()
+        resp.path = path_array
+        return resp
 
 
 class RRT:
@@ -91,14 +105,21 @@ class RRT:
             self.parent = None
 
     def __init__(self, start_point, goal_point, obstacles, sample_rate, \
-                 rho=0.9, path_resolution=0.001):
+                 rho, inflation, path_resolution=0.05):
         
         self.start_node = self.RRTnode(start_point[0], start_point[1])
+        self.start_node.x_path = [self.start_node.x]
+        self.start_node.y_path = [self.start_node.y]
+        self.inflation = inflation
+        if not self.safe(self.start_node, obstacles):
+            raise Exception("Start node is not safe!")
         self.goal_node = self.RRTnode(goal_point[0], goal_point[1])
         self.obstacles = obstacles
-        self.min_rand_area = [xlb, ylb]
-        self.max_rand_area = [xub, yub]
+        
+        self.min_rand_area = [xlb + self.inflation, ylb + self.inflation]
+        self.max_rand_area = [xub - self.inflation, yub - self.inflation]
         self.rho = rho
+        self.inflation = inflation
         self.path_resolution = path_resolution
         self. sample_rate = sample_rate
         self.node_list = []
@@ -122,7 +143,8 @@ class RRT:
 
             if self.safe(new_node, self.obstacles) == True:
                 self.node_list.append(new_node)
-
+            else: 
+                continue
             if self.calculate_distance_to_goal(self.node_list[-1].x, self.node_list[-1].y) <= self.rho:
                 final_node = self.steer(self.node_list[-1], self.goal_node, self.rho)
                 if self.safe(final_node, self.obstacles) == True:
@@ -161,6 +183,9 @@ class RRT:
             new_node.x += self.path_resolution * math.cos(yaw)
             new_node.y += self.path_resolution * math.sin(yaw)
             new_node.yaw += self.path_resolution * math.tan(yaw)
+
+
+
             new_node.x_path.append(new_node.x)
             new_node.y_path.append(new_node.y)
             new_node.yaw_path.append(new_node.yaw)
@@ -180,7 +205,7 @@ class RRT:
         path = [[self.goal_node.x, self.goal_node.y]]
         node = self.node_list[goal_index]
         
-        while node.parent is not None:
+        while node is not None:
             path.append([node.x, node.y])
             node = node.parent
         
@@ -196,7 +221,7 @@ class RRT:
         return distance_g
 
     @staticmethod
-    def safe(node, obstacles):
+    def safe_old(node, obstacles):
         if node == None:
             return False
 
@@ -204,11 +229,29 @@ class RRT:
         for o in obstacles:
             o_list = o.exterior.xy
             for (xx, yy) in zip(o_list[0], o_list[1]):
+
                 distx_list = [xx - x for x in node.x_path]
                 disty_list = [yy - y for y in node.y_path]
-                dist_list = [distx**2 + disty**2 for(distx, disty) in zip(distx_list, disty_list)]
+                dist_list = [math.hypot(distx, disty) for (distx, disty) in zip(distx_list, disty_list)]
 
-                if min(dist_list) < 0.4:
+                for x,y in zip(node.x_path, node.y_path):
+                    if 5.3 < x < 5.7 and 3.3 < y < 3.8:
+                        print("Obs x,y: {},{}".format(xx, yy))
+                        print("Dist: {}".format(math.sqrt((xx-x)**2 + (yy-y)**2)))
+                            
+                
+                if min(dist_list) < 0.6:
+                    return False #collision
+        return True #safe
+
+    def safe(self, node, obstacles):
+        if node == None:
+            return False
+
+        for o in obstacles:
+            for x,y in zip(node.x_path, node.y_path):
+                dist = o.distance(Point(x,y,0))
+                if dist < self.inflation:
                     return False #collision
 
         return True #safe
@@ -245,8 +288,9 @@ def generate_and_publish_obstacles():
     world = json.load(f)
 
     """
-
-    mapFilePath = "../../maps/tutorial_1.world.json"
+    global xlb, xub, ylb, yub
+    #mapFilePath = "../../maps/tutorial_1.world.json"
+    mapFilePath = rospy.get_param(rospy.get_name() + "/world_name")
     mapString = ""
 
     with open(os.path.join(os.path.dirname(__file__), mapFilePath), "r") as file:
@@ -256,7 +300,8 @@ def generate_and_publish_obstacles():
     
     
     world = ast.literal_eval(mapString)#convert string representation of read file into dictionary through some kind of black magic
-    
+    xlb, ylb = world["airspace"]["min"][:2] 
+    xub, yub = world["airspace"]["max"][:2]
 
     plot_walls_list = []
     plot_dilated_walls = []
@@ -266,7 +311,7 @@ def generate_and_publish_obstacles():
         stop_walls = o['plane']['stop'][:2]
         plot_walls_list.append(LineString([tuple(start_walls), tuple(stop_walls)]))
         plot_dilated_walls.append(plot_walls_list[i].buffer(0.1))
-    
+    print(plot_walls_list)
     obstacles_array = MarkerArray()
     
     """
@@ -311,11 +356,12 @@ obstacles_pub = rospy.Publisher('/visualization_marker_array', MarkerArray, queu
 
 #Path
 path_pub = rospy.Publisher('/move_base/TrajectoryPlanner', Path, queue_size=2)
-path_sub = rospy.Subscriber('/cf1/pose', PoseStamped, path_callback)
+rospy.Service('/cf1/path_planning/plan', PlanPath, path_callback)
 
 rospy.sleep(2)
 
 def main():
+    generate_and_publish_obstacles()
     rospy.spin()
 
 if __name__ == '__main__':
