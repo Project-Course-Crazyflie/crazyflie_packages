@@ -106,9 +106,9 @@ class MapOdomUpdate:
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster()
        
         self.update_freq = update_freq
-        #self.kf = KalmanFilter(initial_cov=np.array([100000000.01, 100000000.01, 100000000.01]), R=np.array([.0005, .0005, .001]), delta_t=1.0/self.update_freq)
-        initial_cov = np.ones(6)*100000000000000000000000.0
-        self.kf = KalmanFilter(initial_cov=initial_cov, R=np.array([.0005, .0005, .0005, .0001, .0001, .0001]), delta_t=1.0/self.update_freq)
+        #initial_cov = np.ones(6)*100000000000000000000000.0
+        #self.kf = KalmanFilter(initial_cov=initial_cov, R=np.array([.0005, .0005, .0005, .0001, .0001, .0001]), delta_t=1.0/self.update_freq)
+        self.kf = KalmanFilter(initial_cov=np.array([100000000.01, 100000000.01, 100000000.01, 100000000.01, 100000000.01, 100000000.01]), R=np.array([.001, .001, .001, .001, .001, .001]), delta_t=1.0/self.update_freq)
 
 
     def spin(self):
@@ -226,7 +226,7 @@ class MapOdomUpdate:
                 if maha_dist > 0.7:
                     # outlier
                     print("Outlier")
-                    continue
+                    #continue
 
                 # filtering
                 K = self.kf.kalman_gain(Q)
@@ -346,8 +346,8 @@ class MapOdomUpdate:
                                                t.transform.rotation.w])
 
             a = np.array([a1, a2, a3])
-            sin_avg += 1/n*np.sin(a)
-            cos_avg += 1/n*np.cos(a)
+            sin_avg += 1.0/n*np.sin(a)
+            cos_avg += 1.0/n*np.cos(a)
 
         ax, ay, az = np.arctan2(sin_avg, cos_avg)
         curr1, curr2, curr3 = euler_from_quaternion([avg_transform.transform.rotation.x,
