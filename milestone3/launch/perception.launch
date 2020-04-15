@@ -1,9 +1,9 @@
 <launch>
     <arg name="labels_file" default="$(find milestone3)/scripts/labels"/>
     <arg name="coco_file" default="$(find milestone3)/scripts/perception/coco.names"/>
-    <arg name="cfg_file" default="$(find milestone3)/scripts/perception/yolov3-tiny.cfg"/>
-    <arg name="weights_file" default="$(find milestone3)/scripts/perception/yolov3-tiny.weights"/>
-    <arg name="world_name"/>
+    <arg name="cfg_file" default="$(find milestone3)/scripts/perception/yolo_stuff/yolov3-tiny.cfg"/>
+    <arg name="weights_file" default="$(find milestone3)/scripts/perception/yolo_stuff/yolov3-tiny.weights"/>
+    <arg name="world_name" default="awesome"/>
 
     <node pkg="milestone3" type="undistort_img.py" name="undistort_img">
         <param name="mtx" value="$(find milestone3)/scripts/perception/mtx.npy"/>
@@ -28,5 +28,5 @@
         <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
     </node>
 
-   
+
 </launch>

@@ -1,0 +1,22 @@
+<launch>
+
+	<arg name="world_name"/> <!--default="simple_map"/>-->
+
+	<include file="$(find dd2419_simulation)/launch/simulation.launch">
+		<arg name="gui" value="false"/>
+		<arg name="world_name" value="tutorial_1"/>
+	</include>
+
+
+	<node pkg="tf2_ros" type="static_transform_publisher" name="base_to_cam_trans" args="0.01 0 0.02 -1.57 0 -1.57 cf1/base_link cf1/camera_link">
+	</node>
+	<node pkg="milestone3" type="deep_learning2.py" name="vision"/>
+	<!--<node pkg="milestone2" type="find_object_and_check_it" name="find_n_check">
+		<param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
+			<param name="labels" value="$(find milestone2)/scripts/$(arg labels)"/>
+	</node>-->
+
+	<!--node pkg="milestone3" type="aruco_follower.py" name="aruco_follower"/>-->
+
+
+</launch>
