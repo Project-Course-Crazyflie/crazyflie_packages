@@ -33,8 +33,14 @@ class KalmanFilter:
     def converged(self):
         return 
 
-    def predict(self, A, u):
-        self.cov = np.matmul(np.matmul(A, self.cov), A) + self.R*self.delta_t
+    def predict(self, A, v=None):
+        # TODO: use dynamic process noise
+        R = self.R
+        if v is not None:
+            v_mat = np.diag(abs(v/np.linalg.norm(v)))
+            R = np.matmul(np.matmul(v_mat, self.R), v_mat.transpose())
+        self.cov = np.matmul(np.matmul(A, self.cov), A.transpose()) + R*self.delta_t
+        
 
     def kalman_gain(self, Q):
         K = np.matmul(self.cov, np.linalg.inv(self.cov + Q))
@@ -106,8 +112,18 @@ class MapOdomUpdate:
             self.last_transform.header.stamp = rospy.Time.now()
             
             A = np.diag([1, 1, 1, 1, 1, 1])
-            u = [0, 0, 0, 0, 0, 0]
-            self.kf.predict(A, u)
+            if self.cf1_vel:
+                v = np.array([self.cf1_vel.twist.linear.x,
+                              self.cf1_vel.twist.linear.y,
+                              self.cf1_vel.twist.linear.z,
+                              self.cf1_vel.twist.angular.x,
+                              self.cf1_vel.twist.angular.y,
+                              self.cf1_vel.twist.angular.z])
+                
+                self.kf.predict(A, v)
+            else:
+                self.kf.predict(A)
+
             if self.measurement_msg:
                 if not self.has_transformed:
                     map_to_odom = self.update(self.measurement_msg)
@@ -118,7 +134,7 @@ class MapOdomUpdate:
             # determine u by checking if the drone is in motion
             
             """
-            if False and self.cf1_vel:
+            if self.cf1_vel:
                 K_vel = 0.5
                 vx = self.cf1_vel.twist.linear.x * K_vel
                 vy = self.cf1_vel.twist.linear.y * K_vel
@@ -145,8 +161,8 @@ class MapOdomUpdate:
                 p.header = self.cf1_pose.header # correct to use cf1/odom as frame_id???
                 p.pose.pose = self.cf1_pose.pose
                 p.pose.covariance[0] = self.kf.cov[0][0]
-                #p.pose.covariance[1] = self.kf.cov[0][0]*self.kf.cov[1][1]
-                #p.pose.covariance[6] = self.kf.cov[0][0]*self.kf.cov[1][1]
+                #p.pose.covariance[1] = self.kf.cov[0][1]
+                #p.pose.covariance[6] = self.kf.cov[1][0]
                 p.pose.covariance[7] = self.kf.cov[1][1]
                 p.pose.covariance[-1] = self.kf.cov[5][5]
                 self.cf1_pose_cov_pub.publish(p)
@@ -258,7 +274,8 @@ class MapOdomUpdate:
 
     def get_map_to_odom_transform(self, odom_new_pose):
         time_stamp = odom_new_pose.header.stamp
-        odom_new_in_map = self.tf_buf.transform(odom_new_pose, "map")#, rospy.Duration(.1))
+        # this wait needed for now
+        odom_new_in_map = self.tf_buf.transform(odom_new_pose, "map", rospy.Duration(.01))
         t = TransformStamped()
         t.header.stamp = time_stamp
         t.header.frame_id = "map"

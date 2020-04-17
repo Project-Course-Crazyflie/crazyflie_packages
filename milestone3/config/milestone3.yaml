@@ -6,14 +6,15 @@ navigation:
     vel_yaw_thres: 0.05 # not used yet
 
 localization:
-    R: [0.0005, 0.0005, 0.001]  # not used yet
-    initial_cov: [100, 100, 20] # not used yet
+    process_noise: [0.005, 0.005, 0.005, 0.005, 0.005, 0.005]  # used in v5
+    initial_cov: [100000, 100000, 100000, 100000, 100000, 100000] # used in v5
+    maha_dist_thres: 3
     measurement_config: [true, true, false,   # translation x,y,z
                          false, false, true] # rotation roll,pitch,yaw
-    initial_map_to_odom: [2, 2, 0, 0, 0, 1.57] # [x,y,z,roll,pitch,yaw]
+    initial_map_to_odom: [1, 1, 0, 0, 0, 1.57] # [x,y,z,roll,pitch,yaw]
 perception:
     todo: "TODO"
 
 path_planning:
-    rho: 0.2
-    inflation: 0.05
+    rho: 0.15
+    inflation: 0.1
