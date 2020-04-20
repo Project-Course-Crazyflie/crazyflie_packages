@@ -32,6 +32,6 @@
   ],
 
   "roadsigns": [
-    {"sign": "stop", "pose": {"position": [8.99,  0.0, 0.4], "orientation": [90.0, -90.0, 0.0]}}
+    {"sign": "no_bicycle", "pose": {"position": [8.99,  0.0, 0.4], "orientation": [90.0, -90.0, 0.0]}}
   ]
 }

@@ -10,6 +10,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import roslib
 import rospy
 from sensor_msgs.msg import Image as ImageMsg
+from std_msgs.msg import MultiArrayDimension, Int32MultiArray
 
 
 from models import *  # set ONNX_EXPORT in models.py
@@ -95,6 +96,8 @@ def main():
 				cboxes = [] #same as boxes but retaining the centered coordinates
 
 				for detection in pred:
+					if not detection:
+						continue
 					# extract the class ID and confidence (i.e., probability) of
 					# the current object detection
 					scores = detection[5:]
@@ -115,7 +118,8 @@ def main():
 				detected = False
 				# Process detections
 				for i, det in enumerate(pred):  # detections per image
-					detected = True
+					print('det: ', det)
+
 					s = ''
 
 					s += '%gx%g ' % img.shape[2:]  # print string
@@ -137,22 +141,24 @@ def main():
 							cls = A[1]
 							xyxy = A[2:]
 							if view_img:  # Add bbox to image and send to /boxed_image
+								detected = True
 								label = '%s %.2f' % (names[int(cls)], conf)
-								plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
+								im0 = plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
 
 					# Print time (inference + NMS)
 					t2 = torch_utils.time_synchronized()
 					print('%sDone. (%.3fs)' % (s, t2 - t1))
-					print('possible fps: ', 1/(t2 - t1))
+					#print('possible fps: ', 1/(t2 - t1))
 					# Stream results
 					if detected: # Only publish results if there was a detected sign
+						print('sign detected')
 						if view_img:
 							img_publish(im0)
 
 					# Save results (image with detections)
 					# Send message
-					#box_publish(boxes) # [centerX, centerY, class_n, height, stamp, stamp_ns]
+					box_publish(boxes) # [centerX, centerY, classID, height, width, stamp, stamp_ns]
 
 					print('time from raw image to box sent is: ', t2 - t1)
 
@@ -161,10 +167,10 @@ def main():
 
 class options:
 	def __init__(self):
-		self.cfg = 'yolov3-1cls.cfg'
-		self.weights = 'best.pt'
+		self.cfg = 'yolov3-tiny.cfg'
+		self.weights = 'best-tiny-all.pt'
 		self.classes = 1
-		self.names = 'warn_left.names'
+		self.names = 'three_signs.names'
 		self.source = '////////////////////////////////'
 		self.output = '//////////////////////////////'
 		self.img_size = [640]
@@ -172,7 +178,7 @@ class options:
 		self.iou_thres = 0.6
 		self.fourcc = 'mp4v'
 		self.half = False
-		self.device = ''
+		self.device = 'cpu'
 		self.view_img = True
 		self.save_txt = False
 		self.agnostic_nms = False
@@ -194,7 +200,7 @@ def img_publish(img):
 	except CvBridgeError as e:
 		print(e)
 	return
-"""
+
 def box_publish(boxes):
 	msg = Int32MultiArray()
 	msg.layout.dim = [MultiArrayDimension(),MultiArrayDimension()]
@@ -210,11 +216,11 @@ def box_publish(boxes):
 	msg.data = boxes
 	box_pub.publish(msg)
 	return
-"""
+
 rospy.init_node('vision')
 sub_pose = rospy.Subscriber('cf1/camera/image_raw', ImageMsg, callback)
 image_pub = rospy.Publisher('/boxed_image', ImageMsg, queue_size=1)
-#box_pub = rospy.Publisher('/sign_box', Int32MultiArray, queue_size=1)
+box_pub = rospy.Publisher('/sign_box', Int32MultiArray, queue_size=1)
 
 if __name__ == '__main__':
 	opt = options()
