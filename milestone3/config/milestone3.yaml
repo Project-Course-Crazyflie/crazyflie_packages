@@ -9,6 +9,7 @@ localization:
     process_noise: [0.005, 0.005, 0.005, 0.005, 0.005, 0.005]  # used in v5
     initial_cov: [100000, 100000, 100000, 100000, 100000, 100000] # used in v5
     maha_dist_thres: 3
+    cov_norm_thres: 0.02
     measurement_config: [true, true, false,   # translation x,y,z
                          false, false, true] # rotation roll,pitch,yaw
     initial_map_to_odom: [1, 1, 0, 0, 0, 1.57] # [x,y,z,roll,pitch,yaw]
