@@ -22,7 +22,7 @@ from milestone3.srv import Land, LandRequest
 from milestone3.srv import TakeOff, TakeOffRequest
 from milestone3.srv import MoveToMarker, MoveToMarkerRequest
 
-class StateMachine:
+class NavigationInput:
     def __init__(self):
         """
         States:
@@ -38,52 +38,23 @@ class StateMachine:
         self.spin_client = rospy.ServiceProxy("cf1/navigation/spin", Spin)
         self.move_to_marker_client = rospy.ServiceProxy("cf1/navigation/move_to_marker", MoveToMarker)
 
-        self.checked_markers = []
-        self.unchecked_markers = [2, 3]
-        self.current_state = None
-        
-    def run(self):
-        state = 0
+    def spin(self):
         while not rospy.is_shutdown():
-            if state == 0:
-                print("Taking off")
-                self.takeoff_client()
-                print("Localizing")
-                rospy.sleep(5) # check convergence instead
-                
-                state = 1
-            if state == 1: 
-                if not self.unchecked_markers:
-                    state = 3
-                    continue
-                marker = self.unchecked_markers.pop(0)
-                # do something with resp
-                print("Planning to marker {}".format(marker))
-                while True:
-                    try:
-                        resp = self.plan_and_follow_path_client(marker)
-                    except:
-                        print("Failed to plan...")
-                    else:
-                        break
-                print("Going to marker {}".format(marker))
-                # do something with resp
-                # verify that marker is detected
-                rospy.sleep(1)
-                print("Spinning")
-                resp = self.spin_client()
-                rospy.sleep(1)
-
-            if state == 2:
-                # Localize when lost
+            inp = input()
+            try:
+                inp = int(inp)
+            except:
                 pass
+            else:
+                self.plan_and_follow_path_client(inp)
+                continue
 
-            if state == 3:
+            if inp == "l":
                 self.land_client()
-                print("State machine done!")
-                return     
+            elif inp == "t":
+                self.takeoff_client()
+            elif inp == "s":
+                self.spin_client()
 
-if __name__ == '__main__':
-    rospy.init_node('state_machine')
-    sm = StateMachine()
-    sm.run()
+if __name__ == "__main__":
+    NavigationInput().spin()

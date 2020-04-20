@@ -33,7 +33,7 @@ tf_lis = tf2_ros.TransformListener(tf_buf, queue_size=10)
 fy = 220.72391163
 fx = 221.88078347
 real_size = 0.2
-H, W = 480,640#446, 332  #size of undist images
+H, W = 480,640 #446, 332  #size of undist images
 
 #get all the signs in the map
 w_name = rospy.get_param(rospy.get_name() + "/world_name")
@@ -67,18 +67,24 @@ def main():
 				p.header.stamp.nsecs = boxes.data[n*i+6]
 
 				#find the depth of found object(s)
-
-				p.pose.position.z = fy*real_size/(boxes.data[n*i+3])
-				p.pose.position.x = (boxes.data[n*i]-W/2)*p.pose.position.z/fx
-				p.pose.position.y = (boxes.data[n*i+1]-H/2)*p.pose.position.z/fy
+				Z = fy*real_size/(boxes.data[n*i+3])
+				p.pose.position.z = Z
+				p.pose.position.x = (boxes.data[n*i]-W/2)*Z/fx
+				p.pose.position.y = (boxes.data[n*i+1]-H/2)*Z/fy
 
 				m_class = labels[boxes.data[n*i+2]]
 				#rospy.logwarn((boxes.data[n*i+4])*p.pose.position.z/fx)
 				#rospy.logwarn(real_size)
 
-				yaw_detected = math.pi/2 - math.asin(max( (boxes.data[n*i+4]-W/2)*p.pose.position.z/fx, real_size) / real_size) #value between pi/2 and 0
+				width_world = (boxes.data[n*i+4])*Z/fx
+				rospy.logwarn("width : {}".format(width_world))
+				if Z < width_world/2 :
+					rospy.logwarn("Object to close to get pose, ignoring object")
+					pass
 
-				rospy.loginfo('yaw detected : {}'.format(yaw_detected))
+				yaw_detected = math.pi - math.asin((width_world/2)/Z) - math.asin(min(real_size, width_world)/real_size)
+				
+				rospy.logwarn('yaw detected : {}'.format(yaw_detected))
 
 				#find orientation:
 				if m_class in signs: #if it exist in the map
@@ -91,10 +97,13 @@ def main():
 
 
 					yaw_map = euler_from_quaternion([trans.transform.rotation.x,trans.transform.rotation.y,trans.transform.rotation.z,trans.transform.rotation.w])[0] #x axis upwards for the signs
-					if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected :
+					rospy.logwarn('yaw from map : {}'.format(yaw_map))
+					if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected : #get the closest yaw to the real one
 						yaw_detected = -yaw_detected
 
-					roll, pitch, yaw = yaw_detected-math.pi/2, 0,-3.14/2#3.14/2, -3.14/2  #weird axis definition..  +90??
+					rospy.logwarn('yaw detected corrected : {}'.format(yaw_detected))
+
+					roll, pitch, yaw = yaw_detected, 0,-3.14/2 #3.14/2, -3.14/2  #weird axis definition..  +90??
 					(p.pose.orientation.x,
     				 p.pose.orientation.y,
     				 p.pose.orientation.z,
