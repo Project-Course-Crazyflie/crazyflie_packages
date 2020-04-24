@@ -16,6 +16,8 @@ from std_msgs.msg import Bool, Int32MultiArray
 from crazyflie_driver.msg import Position
 from aruco_msgs.msg import Marker, MarkerArray
 
+from milestone3.srv import ResetKalmanFilter, ResetKalmanFilterResponse
+
 import matplotlib.pyplot as plt
 
 class KalmanFilter:
@@ -37,25 +39,72 @@ class KalmanFilter:
     def has_converged(self):
         return np.linalg.norm(self.cov) < self.cov_norm_thres
 
+    def handle_measurements(self, belief, measurements, Qs):
+        assert len(measurements) == len(Qs), "measurements and !s need to have the same length"
+        valids = []
+        kalman_gains = []
+        new_beliefs = []
+        for m, Q in zip(measurements, Qs):
+            valid, K, new_belief = self.handle_measurement(belief, m, Q)
+            valids.append(valid)
+            if valid:
+                kalman_gains.append(K)
+                new_beliefs.append(new_belief)
+        if len(new_beliefs) == 0:
+            new_belief = None
+            K = None
+        else:
+            new_belief = self.average_beliefs(new_beliefs)
+            K = sum(kalman_gains)/len(kalman_gains)
+        return valids, K, new_belief
+
     def handle_measurement(self, belief, measurement, Q):
         """returns Kalman 
         """
-        diff = self.inovation(belief, measurement)
-        valid = self.is_valid_measurement(diff, Q)
+        innovation = self.innovation(belief, measurement)
+        valid = self.maha_dist(innovation, Q) < self.maha_dist_thres
         K = self.kalman_gain(Q)
-        
+        new_belief = self.new_belief(belief, innovation, K)
+        return valid, K, new_belief
 
-    def is_valid_measurement(self, innovation, Q):
-        return self.maha_dist(innovation, Q) < self.maha_dist_thres
+    def average_beliefs(self, beliefs):
+        avg_belief = [0]*6
+        n = len(beliefs)
+        sin_avg = 0
+        cos_avg = 0
+        for b in beliefs:
+            avg_belief[0] += b[0]/n
+            avg_belief[1] += b[1]/n
+            avg_belief[3] += b[2]/n
+
+            a = np.array(b[3:])
+            sin_avg += 1.0/n*np.sin(a)
+            cos_avg += 1.0/n*np.cos(a)
+
+        avg_belief[3:] = np.arctan2(sin_avg, cos_avg)
+        return avg_belief
 
     def maha_dist(self, diff, Q):
         return np.sqrt(np.matmul(np.matmul(diff.transpose(), np.linalg.inv(self.cov)), diff))
 
-    def inovation(self, believed_state, measured_state):
+    def innovation(self, believed_state, measured_state):
         trans = (measured_state[:3]-believed_state[:3])
         rot = (measured_state[3:]-believed_state[3:])
         rot = (rot + np.pi) % (2*np.pi) - np.pi
         return np.concatenate([trans, rot])
+
+    def kalman_gain(self, Q):
+        K = np.matmul(self.cov, np.linalg.inv(self.cov + Q))
+        return K
+
+    def new_belief(self, belief, innovation, K):
+        K = K.diagonal()
+        pos = belief[:3] + innovation[:3]*K[:3]
+
+        rot = belief[3:] + innovation[3:]*K[3:]
+        rot = (rot + np.pi) % (2*np.pi) - np.pi
+        
+        return np.concatenate([pos, rot])
 
     def predict(self, A, v=None):
         # TODO: use dynamic process noise
@@ -64,10 +113,6 @@ class KalmanFilter:
             v_mat = np.diag(abs(v/np.linalg.norm(v)))
             R = np.matmul(np.matmul(v_mat, self.R), v_mat.transpose())
         self.cov = np.matmul(np.matmul(A, self.cov), A.transpose()) + R*self.delta_t
-
-    def kalman_gain(self, Q):
-        K = np.matmul(self.cov, np.linalg.inv(self.cov + Q))
-        return K
 
     def update_with_gain(self, K):
         self.cov = np.matmul((np.eye(K.shape[0])-K), self.cov)
@@ -119,19 +164,18 @@ class MapOdomUpdate:
         self.measured_invalid_pub = rospy.Publisher("cf1/pose/measured_invalid", PoseArray, queue_size=1)
         self.filtered_pub = rospy.Publisher("cf1/pose/filtered", PoseStamped, queue_size=1)
 
-        #rospy.Service("cf1/localization/reset_kalman_filter", ResetKalmanFilter, self.land_callback)
+        rospy.Service("cf1/localization/reset_kalman_filter", ResetKalmanFilter, self.reset_kalman_filter)
 
     def spin(self):
         rate = rospy.Rate(self.update_freq)
         self.has_transformed = False # to check if initial transform with kalman gain 1 result in good transform
         while not rospy.is_shutdown():
 
-            
             self.broadcaster.sendTransform(self.last_transform)
             self.last_transform.header.stamp = rospy.Time.now()
             
             A = np.diag([1, 1, 1, 1, 1, 1])
-            if False and self.cf1_vel:
+            if self.cf1_vel:
                 v = np.array([self.cf1_vel.twist.linear.x,
                               self.cf1_vel.twist.linear.y,
                               self.cf1_vel.twist.linear.z,
@@ -144,27 +188,28 @@ class MapOdomUpdate:
                 self.kf.predict(A)
 
             if self.measurement_msg:
-                if not self.has_transformed:
-                    map_to_odom = self.update(self.measurement_msg)
-                    if map_to_odom: 
-                        self.last_transform = map_to_odom
-                        #self.has_transformed = True
+                map_to_odom = self.update(self.measurement_msg)
+                if map_to_odom: 
+                    self.last_transform = map_to_odom
 
-            #norm = np.linalg.norm(self.kf.cov)
-            #print("Cov norm: {}".format(norm))
             self.converged_pub.publish(Bool(self.kf.has_converged()))
 
             if self.cf1_pose: 
                 p = PoseWithCovarianceStamped()
-                p.header = self.cf1_pose.header # correct to use cf1/odom as frame_id???
+                p.header = self.cf1_pose.header
                 p.pose.pose = self.cf1_pose.pose
-                p.pose.covariance[0] = self.kf.cov[0][0]
-                #p.pose.covariance[1] = self.kf.cov[0][1]
-                #p.pose.covariance[6] = self.kf.cov[1][0]
-                p.pose.covariance[7] = self.kf.cov[1][1]
-                p.pose.covariance[-1] = self.kf.cov[5][5]
+                self.tf_buf.transform(p, "map")
+                p.pose.covariance[0] = self.kf.cov[0][0] # x
+                p.pose.covariance[1] = self.kf.cov[0][1] # xy
+                p.pose.covariance[6] = self.kf.cov[1][0] # yx
+                p.pose.covariance[7] = self.kf.cov[1][1] # y
+                p.pose.covariance[-1] = self.kf.cov[5][5] # z angle
                 self.cf1_pose_cov_pub.publish(p)
             rate.sleep()
+
+    def reset_kalman_filter(self, _):
+        self.kf.reset()
+        return ResetKalmanFilterResponse()
 
     def cf1_pose_callback(self, msg):
         self.cf1_pose = msg
@@ -176,9 +221,72 @@ class MapOdomUpdate:
         if self.measurement_msg != m_array:
             self.measurement_msg = m_array
 
+    def _update(self, m_array):
+        """
+        Giving kalman filter the responsibility to handle measurements
+        """
+        if self.old_msg == m_array:
+            # Message old 
+            return
+        self.old_msg = m_array
+        
+        
+        try:
+            believed_trans = self.tf_buf.lookup_transform("map", "cf1/base_link", rospy.Time(0))
+        except:
+            print("Is map to cf1/odom being published?")
+            return
+        believed_pose = PoseStamped()
+        believed_pose.header = believed_trans.header
+        believed_pose.pose.position = Point(*[believed_trans.transform.translation.x,
+                                               believed_trans.transform.translation.y,
+                                               believed_trans.transform.translation.z])
+        believed_pose.pose.orientation = believed_trans.transform.rotation
+        believed_state = self.pose_stamped_to_state(believed_pose)
+
+        measurements = []
+        measured_poses = []
+        Qs = []
+        for marker in m_array.markers:
+            # TODO: make this general (no hardcoded Qs)
+            Q = np.diag([0.3, 0.3, 0.3, 0.1, 0.1, 0.01])
+            
+            measured_pose = self.get_measured_pose_filtered(believed_pose, marker)
+            measured_state = self.pose_stamped_to_state(measured_pose)
+            measured_poses.append(measured_pose.pose)
+            measurements.append(measured_state)
+            Qs.append(Q)
+
+        valids, K, filtered_state = self.kf.handle_measurements(believed_state, measurements, Qs)
+
+        measured_valid_poses = PoseArray()
+        measured_invalid_poses = PoseArray()
+        measured_valid_poses.header.frame_id = "map"
+        measured_invalid_poses.header.frame_id = "map"
+
+        for v, meas_pose, mark in zip(valids, measured_poses, m_array.markers):
+            feedback = Int32MultiArray()
+            feedback.data = [int(v), mark.id]
+            self.measurement_fb_pub.publish(feedback)
+            if v:
+                measured_valid_poses.poses.append(meas_pose)
+            else:
+                measured_invalid_poses.poses.append(meas_pose)
+            
+        self.measured_valid_pub.publish(measured_valid_poses) # visualization
+        self.measured_invalid_pub.publish(measured_invalid_poses) # visualization
+
+        #print("Using {}/{} markers measurements".format(len(filtered_poses), n_markers))
+        if filtered_state:
+            #self.kf.update_with_gain(K)
+            filtered_pose = self.state_to_pose_stamped(filtered_state, "map", believed_pose.header.stamp)
+            self.filtered_pub.publish(filtered_pose) # for visualization
+            map_to_odom = self.get_map_to_odom(filtered_pose)
+            #return map_to_odom
+
     def update(self, m_array):
         """
-        Average all measurements
+        Old working version
         """
         if self.old_msg == m_array:
             # Message old 
@@ -192,66 +300,45 @@ class MapOdomUpdate:
         measured_valid_poses.header.frame_id = "map"
         measured_invalid_poses.header.frame_id = "map"
         n_markers = len(m_array.markers)
+        try:
+            believed_trans = self.tf_buf.lookup_transform("map", "cf1/base_link", rospy.Time(0))
+        except:
+            print("Is map to cf1/odom being published?")
+            return
+        believed_pose = PoseStamped()
+        believed_pose.header = believed_trans.header
+        believed_pose.pose.position = Point(*[believed_trans.transform.translation.x,
+                                               believed_trans.transform.translation.y,
+                                               believed_trans.transform.translation.z])
+        believed_pose.pose.orientation = believed_trans.transform.rotation
+        believed_state = self.pose_stamped_to_state(believed_pose)
+        time_stamp = believed_pose.header.stamp
 
         for marker in m_array.markers:
-            # TODO: make this general (no hardcoded Qs)            
-            if marker.id > 9: 
-                frame_detected = "sign_detected/stop"
-                frame_marker = "sign/stop"
-                print("Using stop sign!!!")
-                Q = np.diag([0.5, 0.5, 0.5])
-            else: 
-                frame_detected = "aruco/detected" + str(marker.id)
-                frame_marker = "aruco/marker" + str(marker.id)
-                Q = np.diag([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
-
-            try:
-                # just to get correct time stamp
-                time_stamp = self.tf_buf.lookup_transform(frame_marker, frame_detected, rospy.Time(0)).header.stamp
-            except:
-                print("Wait a bit...")
-                return
+            # TODO: make this general (no hardcoded Qs)
+            Q = np.diag([0.3, 0.3, 0.3, 0.1, 0.1, 0.01])
 
             measurement_fb = Int32MultiArray()
-            # could this fail?
-            believed_trans = self.tf_buf.lookup_transform("map", "cf1/base_link", time_stamp)
-            believed_pose = PoseStamped()
-            believed_pose.header = believed_trans.header
-            believed_pose.pose.position = Point(*[believed_trans.transform.translation.x,
-                                                  believed_trans.transform.translation.y,
-                                                  believed_trans.transform.translation.z])
-            believed_pose.pose.orientation = believed_trans.transform.rotation
-            believed_state = self.pose_stamped_to_state(believed_pose)
-
-            measured_pose = self.get_measured_pose_filtered(believed_pose, frame_marker, frame_detected)
+            measured_pose = self.get_measured_pose_filtered(believed_pose, marker)
             measured_state = self.pose_stamped_to_state(measured_pose)
-            
-            diff = self.kf.inovation(believed_state, measured_state)
-            maha_dist = self.kf.maha_dist(diff, Q)
-            print("Mahalanobis dist: {}".format(maha_dist))
-            if maha_dist > self.kf.maha_dist_thres:
-                # outlier
-                print("Outlier")
-                measured_invalid_poses.poses.append(measured_pose.pose)
-                measurement_fb.data = [marker.id, 0]
-                self.measurement_fb_pub.publish(measurement_fb)
-                continue
-            else:
-                measured_valid_poses.poses.append(measured_pose.pose)
-                measurement_fb.data = [marker.id, 1]
-                self.measurement_fb_pub.publish(measurement_fb)
-                
-            K = self.kf.kalman_gain(Q)
-            kalman_gains.append(K)
-            filtered_state = self.filter_state(believed_state, measured_state, K)
+
+            valid, K, filtered_state = self.kf.handle_measurement(believed_state, measured_state, Q)
             # for testing with K=1
-            #filtered_state = believed_state + self.kf.inovation(believed_state, measured_state)*1
+            #filtered_state = believed_state + self.kf.innovation(believed_state, measured_state)*1
 
-            filtered_pose = self.state_to_pose_stamped(filtered_state, believed_pose.header.frame_id, time_stamp)
-            filtered_poses.append(filtered_pose)
+            measurement_fb.data = [marker.id, int(valid)]
+            self.measurement_fb_pub.publish(measurement_fb)
+            if valid: 
+                kalman_gains.append(K)
+                measured_valid_poses.poses.append(measured_pose.pose)
+                filtered_pose = self.state_to_pose_stamped(filtered_state, believed_pose.header.frame_id, time_stamp)
+                filtered_poses.append(filtered_pose)
+            else:
+                measured_invalid_poses.poses.append(measured_pose.pose)
+                continue
 
-        self.measured_valid_pub.publish(measured_valid_poses)
-        self.measured_invalid_pub.publish(measured_invalid_poses)
+        self.measured_valid_pub.publish(measured_valid_poses) # visualization
+        self.measured_invalid_pub.publish(measured_invalid_poses) # visualization
 
         print("Using {}/{} markers measurements".format(len(filtered_poses), n_markers))
         if len(filtered_poses) > 0:
@@ -263,29 +350,14 @@ class MapOdomUpdate:
 
             #print("Updated")
             return map_to_odom
-
-
-    def get_map_to_odom(self, filtered_pose):
-        time_stamp = filtered_pose.header.stamp
-        base_to_odom = self.tf_buf.lookup_transform("cf1/base_link", "cf1/odom", time_stamp)
-        filtered_trans = TransformStamped()
-        filtered_trans.header = filtered_pose.header
-        filtered_trans.child_frame_id = "cf1/base_link/filtered"
-        filtered_trans.transform.translation = Vector3(*[filtered_pose.pose.position.x,
-                                                         filtered_pose.pose.position.y,
-                                                         filtered_pose.pose.position.z])
-        filtered_trans.transform.rotation = filtered_pose.pose.orientation
-        self.tf_buf.set_transform(filtered_trans, "gandalfs_authority")
-        filtered_to_odom = base_to_odom
-        filtered_to_odom.header.frame_id = "cf1/base_link/filtered"
-        filtered_to_odom.child_frame_id = "cf1/odom_new"
-        self.tf_buf.set_transform(filtered_to_odom, "gandalfs_authority")
-        map_to_odom = self.tf_buf.lookup_transform_core("map", "cf1/odom_new", time_stamp)
-        map_to_odom.child_frame_id = "cf1/odom"
-        return map_to_odom
-
-    def get_measured_pose_filtered(self, believed_pose, frame_marker, frame_detected):
+   
+    def get_measured_pose_filtered(self, believed_pose, marker):
         time_stamp = believed_pose.header.stamp
+        frame_detected = "tjululu/detected" + str(marker.id)
+        frame_marker = "aruco/marker" + str(marker.id)
+        t = self.transform_from_marker(marker, frame_detected, time_stamp)
+        self.tf_buf.set_transform(t, "gandalfs_authority")
+        self.broadcaster.sendTransform(t) # for vizualization
         measured_orientation = self.get_map_to_map_detected_rotation(frame_marker, frame_detected, time_stamp)
 
         # Disregard rotational diplacement of marker detection
@@ -308,7 +380,7 @@ class MapOdomUpdate:
 
         detected_map_frame = frame_detected + "_map_reference"
         # not use _core here?
-        map_to_detected = self.tf_buf.lookup_transform("map", frame_detected, time_stamp)
+        map_to_detected = self.tf_buf.lookup_transform_core("map", frame_detected, time_stamp)
         map_to_detected.child_frame_id = detected_map_frame
         map_to_detected.header.stamp = time_stamp
         # Disregard translational diplacement of marker detection
@@ -325,12 +397,43 @@ class MapOdomUpdate:
         pose_in_marker.header.frame_id = marker_map_frame
         measured_pose = self.tf_buf.transform(pose_in_marker, believed_pose.header.frame_id)
 
+        # visualization
+        
+        #map_to_marker = self.tf_buf.lookup_transform_core("map", frame_marker, time_stamp)
+        #marker_to_detected = self.tf_buf.lookup_transform_core(marker_map_frame, detected_map_frame, time_stamp)
+        #map_to_detected = self.tf_buf.lookup_transform_core("map", frame_detected, time_stamp)
+        ref_to_ref_det = self.tf_buf.lookup_transform_core(marker_map_frame, detected_map_frame, time_stamp)
+        map_to_detected_ref = self.tf_buf.lookup_transform_core("map", detected_map_frame, time_stamp)
+        filt_det = TransformStamped()
+        filt_det.header.stamp = time_stamp
+        filt_det.header.frame_id = "map"
+        filt_det.child_frame_id = frame_detected + "_filtered"
+        filt_det.transform.translation = map_to_detected_ref.transform.translation
+        filt_det.transform.rotation = ref_to_ref_det.transform.rotation
+        #q1 = [map_to_marker.transform.rotation.x, map_to_marker.transform.rotation.y,
+        #      map_to_marker.transform.rotation.z, map_to_marker.transform.rotation.w]
+        #q2 = [measured_orientation.x, measured_orientation.y, measured_orientation.z, measured_orientation.w]
+        #q = quaternion_multiply(q1, q2)
+        #filt_det.transform.rotation = Quaternion(*q)
+        #self.broadcaster.sendTransform(filt_det)
+        
+        # end visualization
+
         return self.tf_buf.transform(measured_pose, "map")
+
+    def transform_from_marker(self, m, frame, stamp):
+        t = TransformStamped()
+        t.header.stamp = stamp
+        t.header.frame_id = 'cf1/camera_link'
+        t.child_frame_id = frame
+        t.transform.translation = Vector3(*[m.pose.pose.position.x, m.pose.pose.position.y, m.pose.pose.position.z])
+        t.transform.rotation = m.pose.pose.orientation
+        return t
 
     def get_map_to_map_detected_rotation(self, frame_marker, frame_detected, time_stamp):
         # can this fail?
-        map_to_marker = self.tf_buf.lookup_transform(frame_marker, "map", time_stamp)
-        marker_to_detected = self.tf_buf.lookup_transform(frame_marker, frame_detected, time_stamp)
+        map_to_marker = self.tf_buf.lookup_transform_core(frame_marker, "map", time_stamp)
+        marker_to_detected = self.tf_buf.lookup_transform_core(frame_marker, frame_detected, time_stamp)
 
         map_to_marker_rot = [map_to_marker.transform.rotation.x,
                              map_to_marker.transform.rotation.y,
@@ -346,7 +449,6 @@ class MapOdomUpdate:
         rotation = quaternion_multiply(detected_to_map_detected, rotation)
         
         return Quaternion(*rotation)
-
 
     def filter_state(self, believed_state, measured_state, K):
         K = K.diagonal()
@@ -378,9 +480,6 @@ class MapOdomUpdate:
         q = Quaternion(*q_ls)
         p.pose.orientation = q
         return p
-
-
-    
 
     def average_poses(self, poses):
         avg_pose = PoseStamped()
@@ -414,6 +513,28 @@ class MapOdomUpdate:
         avg_pose.pose.orientation.z = qz
         avg_pose.pose.orientation.w = qw
         return avg_pose
+
+
+    def get_map_to_odom(self, filtered_pose):
+        time_stamp = filtered_pose.header.stamp
+        base_to_odom = self.tf_buf.lookup_transform("cf1/base_link", "cf1/odom", time_stamp)
+        filtered_trans = TransformStamped()
+        filtered_trans.header = filtered_pose.header
+        filtered_trans.child_frame_id = "cf1/base_link/filtered"
+        filtered_trans.transform.translation = Vector3(*[filtered_pose.pose.position.x,
+                                                         filtered_pose.pose.position.y,
+                                                         filtered_pose.pose.position.z])
+        filtered_trans.transform.rotation = filtered_pose.pose.orientation
+        self.tf_buf.set_transform(filtered_trans, "gandalfs_authority")
+        filtered_to_odom = base_to_odom
+        filtered_to_odom.header.frame_id = "cf1/base_link/filtered"
+        filtered_to_odom.child_frame_id = "cf1/odom_new"
+        self.tf_buf.set_transform(filtered_to_odom, "gandalfs_authority")
+        map_to_odom = self.tf_buf.lookup_transform_core("map", "cf1/odom_new", time_stamp)
+        map_to_odom.child_frame_id = "cf1/odom"
+        return map_to_odom
+
+
 
 if __name__ == '__main__':
     rospy.init_node('update_map_to_odom')

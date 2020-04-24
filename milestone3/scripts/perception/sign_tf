@@ -22,9 +22,12 @@ def callback(msg):
 	boxes_msg = msg
 	return
 
-
+def publish_sign_id(id):
+	sign_pub.publish(id+10)
+	
 rospy.init_node("sign_tf")
 box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
+sign_pub = rospy.Publisher('cf1/localization/measurement_feedback', Int32MultiArray, queue_size=1)
 br = tf2_ros.TransformBroadcaster()
 tf_buf   = tf2_ros.Buffer()
 tf_lis = tf2_ros.TransformListener(tf_buf, queue_size=10)
@@ -71,8 +74,10 @@ def main():
 				p.pose.position.z = Z
 				p.pose.position.x = (boxes.data[n*i]-W/2)*Z/fx
 				p.pose.position.y = (boxes.data[n*i+1]-H/2)*Z/fy
-
-				m_class = labels[boxes.data[n*i+2]]
+ 
+				sign_id = boxes.data[n*i+2]
+				sign_class = labels[sign_id]
+				publish_sign_id(sign_id)
 				#rospy.logwarn((boxes.data[n*i+4])*p.pose.position.z/fx)
 				#rospy.logwarn(real_size)
 
@@ -80,24 +85,25 @@ def main():
 				rospy.logwarn("width : {}".format(width_world))
 				if Z < width_world/2 :
 					rospy.logwarn("Object to close to get pose, ignoring object")
-					pass
+					continue
 
 				yaw_detected = math.pi - math.asin((width_world/2)/Z) - math.asin(min(real_size, width_world)/real_size)
 				
 				rospy.logwarn('yaw detected : {}'.format(yaw_detected))
 
 				#find orientation:
-				if m_class in signs: #if it exist in the map
+				if sign_class in signs: #if it exist in the map
 					#Transform the map pose of the sign in the same frame
 					try:
-						trans = tf_buf.lookup_transform("cf1/camera_link", 'sign/' + m_class, rospy.Time())
+						trans = tf_buf.lookup_transform("cf1/camera_link", 'sign/' + sign_class, rospy.Time())
 					except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
 						rate.sleep()
 						continue
 
-
+					#we might want to cancel the rotation of the drone by doing -drone_yaw (from cf1/pose topic)
 					yaw_map = euler_from_quaternion([trans.transform.rotation.x,trans.transform.rotation.y,trans.transform.rotation.z,trans.transform.rotation.w])[0] #x axis upwards for the signs
 					rospy.logwarn('yaw from map : {}'.format(yaw_map))
+
 					if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected : #get the closest yaw to the real one
 						yaw_detected = -yaw_detected
 
