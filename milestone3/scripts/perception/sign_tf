@@ -16,27 +16,30 @@ from tf.transformations import quaternion_from_euler,euler_from_quaternion
 
 
 boxes_msg = None
+pose_msg = None
 
-def callback(msg):
+def callback_box(msg):
 	global boxes_msg
 	boxes_msg = msg
+	return
+
+def callback_pose(msg):
+	global pose_msg
+	pose_msg = msg
 	return
 
 def publish_sign_id(id):
 	sign_pub.publish(id+10)
 	
 rospy.init_node("sign_tf")
-box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback)
+box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback_box)
+pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, callback_pose)
 sign_pub = rospy.Publisher('cf1/localization/measurement_feedback', Int32MultiArray, queue_size=1)
 br = tf2_ros.TransformBroadcaster()
 tf_buf   = tf2_ros.Buffer()
 tf_lis = tf2_ros.TransformListener(tf_buf, queue_size=10)
 
 
-fy = 220.72391163
-fx = 221.88078347
-real_size = 0.2
-H, W = 480,640 #446, 332  #size of undist images
 
 #get all the signs in the map
 w_name = rospy.get_param(rospy.get_name() + "/world_name")
@@ -50,6 +53,12 @@ rospy.loginfo('reading label file: '+label_file_name)
 with open(label_file_name, 'rb') as f:
 	labels = f.read().strip().split("\n")
 	rospy.loginfo('reading labels:')
+	
+fy = 220.72391163
+fx = 221.88078347
+real_size = world['roadsign_size'][0]
+H, W = 480,640 #446, 332  #size of undist images
+
 
 def main():
 	global boxes_msg
@@ -88,6 +97,10 @@ def main():
 					continue
 
 				yaw_detected = math.pi - math.asin((width_world/2)/Z) - math.asin(min(real_size, width_world)/real_size)
+				#we might want to cancel the rotation of the drone by doing -euler_from_quaternion([pose_msg.pose.orientation.x,
+				# 																					pose_msg.pose.orientation.y,
+				# 																					pose_msg.pose.orientation.z,
+				# 																					pose_msg.pose.orientation.w])[2]
 				
 				rospy.logwarn('yaw detected : {}'.format(yaw_detected))
 
@@ -100,8 +113,12 @@ def main():
 						rate.sleep()
 						continue
 
-					#we might want to cancel the rotation of the drone by doing -drone_yaw (from cf1/pose topic)
-					yaw_map = euler_from_quaternion([trans.transform.rotation.x,trans.transform.rotation.y,trans.transform.rotation.z,trans.transform.rotation.w])[0] #x axis upwards for the signs
+					
+					yaw_map = euler_from_quaternion([trans.transform.rotation.x,
+														trans.transform.rotation.y,
+														trans.transform.rotation.z,
+														trans.transform.rotation.w])[0] #x axis upwards for the signs
+
 					rospy.logwarn('yaw from map : {}'.format(yaw_map))
 
 					if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected : #get the closest yaw to the real one
