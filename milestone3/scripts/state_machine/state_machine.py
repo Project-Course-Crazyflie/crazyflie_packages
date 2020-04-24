@@ -49,7 +49,7 @@ class StateMachine:
         self.convergence_msg = None
 
         self.checked_markers = []
-        self.unchecked_markers = [2, 2]
+        self.unchecked_markers = [1, 2,3,4,5,6,7]
         self.current_state = None
 
     def measurement_fb_callback(self, msg):
@@ -86,8 +86,8 @@ class StateMachine:
         while not rospy.is_shutdown():
             if state == "init":
                 print("Taking off")
-                #self.takeoff_client()
-                rospy.sleep(1) #pause remove
+                self.takeoff_client()
+                #rospy.sleep(1) #pause remove
                 print("Localizing")
                 if not self.verify_convergence(10):
                     print("Localization failed")
@@ -96,7 +96,7 @@ class StateMachine:
                 print("Localization complete!")
                 state = "go_to_next_marker"
 
-            if state == "go_to_next_marker": 
+            if state == "go_to_next_marker":
                 if not self.unchecked_markers:
                     state = "done"
                     continue
@@ -105,8 +105,8 @@ class StateMachine:
                 print("Planning to marker {}".format(marker))
                 while True:
                     try:
-                        #resp = self.plan_and_follow_path_client(marker)
-                        rospy.sleep(1) #pause remove
+                        resp = self.plan_and_follow_path_client(marker)
+                        #rospy.sleep(1) #pause remove
                     except:
                         print("Failed to plan...")
                     else:
@@ -117,7 +117,7 @@ class StateMachine:
                 rospy.sleep(1)
                 print("Looking for marker {}".format(marker))
                 if self.verify_marker(marker, 3):
-                    print("Found it!")    
+                    print("Found it!")
                 else:
                     print("Failed to find marker")
                     state = "abort"
@@ -134,14 +134,15 @@ class StateMachine:
             if state == "abort":
                 print("Aborting")
                 print("Landing")
+                self.land_client()
                 return
 
             if state == "done":
                 print("Landing")
-                #self.land_client()
+                self.land_client()
 
                 print("State machine done!")
-                return     
+                return
 
 if __name__ == '__main__':
     rospy.init_node('state_machine')
