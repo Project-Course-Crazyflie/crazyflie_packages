@@ -25,5 +25,6 @@
     {"id": 1, "pose": {"position": [0, 0.715, 0.65], "orientation": [0.0, 0, -90]}},
     {"id": 13, "pose": {"position": [0.81, 0.0, 0.405], "orientation": [0.0, 0, -180]}},
     {"id": 11, "pose": {"position": [2.04, 1.52, 1.1], "orientation": [0.0, 90, 90]}}
+    {"id": 10, "pose": {"position": [-0.14, 1.68, 0.0], "orientation": [0.0, 0, 0]}}
 ]
 }
