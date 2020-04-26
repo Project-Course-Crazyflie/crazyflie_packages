@@ -96,7 +96,7 @@ class StateMachine:
                 print("Localization complete!")
                 state = "go_to_next_marker"
 
-            if state == "go_to_next_marker": 
+            if state == "go_to_next_marker": #we might want to break down this state into more states (spin, planing_path, going...)
                 if not self.unchecked_markers:
                     state = "done"
                     continue
