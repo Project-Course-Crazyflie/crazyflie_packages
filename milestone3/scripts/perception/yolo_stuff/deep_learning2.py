@@ -44,13 +44,13 @@ def main():
 		"""
 		-----------------------------------------------------------------------------
 		"""
-		rate = rospy.Rate(10)
+		rate = rospy.Rate(3)
 		while not rospy.is_shutdown():
 			rate.sleep()
 
 			if image_msg:
 				t1 = torch_utils.time_synchronized()
-				boxes = []
+				cboxes = []
 
 				#Run the model and send result-message
 				#Variable explanations:::::::::::::::
@@ -61,9 +61,11 @@ def main():
 
 				# Read image
 				try:
-					im0 = bridge.imgmsg_to_cv2(image_msg, 'bgr8')
+					im0 = bridge.imgmsg_to_cv2(image_msg, 'rgb8')
 				except CvBridgeError as e:
 					rospy.logwarn(e)
+				stamp = image_msg.header.stamp.secs
+				stamp_ns = image_msg.header.stamp.nsecs
 				image_msg = None
 
 				# resize by 0-padding
@@ -88,42 +90,20 @@ def main():
 				# Inference
 				#
 				pred = model(img)[0]
+
 				#
 
 				# Apply NMS
 				pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
 
-				cboxes = [] #same as boxes but retaining the centered coordinates
-
-				for detection in pred:
-					if not detection:
-						continue
-					# extract the class ID and confidence (i.e., probability) of
-					# the current object detection
-					scores = detection[5:]
-					classID = np.argmax(scores)
-					conf = scores[classID]#detection[4]#
-					# filter out weak predictions by ensuring the detected
-					# probability is greater than the minimum probability
-					if conf > confidence:# and detection[classID] > 0.5:
-						# scale the bounding box coordinates back relative to the
-						# size of the image, keeping in mind that YOLO actually
-						# returns the center (x, y)-coordinates of the bounding
-						# box followed by the boxes' width and height
-						box = detection[0:4] * np.array([W, H, W, H])
-						(centerX, centerY, width, height) = box.astype(np.int32)
-
-						cboxes.extend([centerX, centerY, classID, height, width, stamp, stamp_ns])
-
 				detected = False
 				# Process detections
 				for i, det in enumerate(pred):  # detections per image
-					print('det: ', det)
 
-					s = ''
-
-					s += '%gx%g ' % img.shape[2:]  # print string
+					s = str(img.shape[2]) + 'x' + str(img.shape[3])#'%gx%g ' % img.shape[2:]  # print string
 					if det is not None and len(det):
+
+						detected = True
 						# Rescale boxes from img_size to im0 size
 						det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
@@ -131,46 +111,52 @@ def main():
 						# Print results
 						for c in det[:, -1].unique():
 							n = (det[:, -1] == c).sum()  # detections per class
-							s += '%g %ss, ' % (n, names[int(c)])  # add to string
-
-						# Write results
-						#for *xyxy, conf, cls in det:
+							s += ' ' + str(int(n)) + ' ' + names[int(c)] + 's |'#'%g %ss, ' % (n, names[int(c)])  # add number of 'name's to string
 
 						for A in det:
-							conf = A[0]
-							cls = A[1]
-							xyxy = A[2:]
+							conf = A[4]
+							cls = A[-1]
+							xyxy = A[:4]
+							print('xyxy: ', xyxy)
+							if any(xyxy[2:] <= 1):
+								if len(det) == 1:
+									detected = False
+									break
+								continue
 							if view_img:  # Add bbox to image and send to /boxed_image
-								detected = True
-								label = '%s %.2f' % (names[int(cls)], conf)
+								label = names[int(c)] + str(conf)#'%s %.2f' % (names[int(cls)], conf)
 								im0 = plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
+							conf = A[4]
+							(centerX, centerY, width, height) = xyxy
+							print('cls: ' + str(cls))
+							cboxes.extend([int(centerX), int(centerY), int(cls), int(height), int(width), stamp, stamp_ns])
 
-					# Print time (inference + NMS)
-					t2 = torch_utils.time_synchronized()
-					print('%sDone. (%.3fs)' % (s, t2 - t1))
-					#print('possible fps: ', 1/(t2 - t1))
-					# Stream results
-					if detected: # Only publish results if there was a detected sign
-						print('sign detected')
-						if view_img:
-							img_publish(im0)
+				if detected:
+
+					# Send message
+					box_publish(cboxes) # [centerX, centerY, classID, height, width, stamp, stamp_ns]
+					#print('time from raw image to box sent is: ', t2 - t1)
+
+					if view_img:
+						t2 = torch_utils.time_synchronized()
+						print(s + 'Done in ' + str(t2 - t1) + ' seconds')
+						img_publish(im0)
 
 					# Save results (image with detections)
-					# Send message
-					box_publish(boxes) # [centerX, centerY, classID, height, width, stamp, stamp_ns]
 
-					print('time from raw image to box sent is: ', t2 - t1)
+
+
 
 
 
 
 class options:
 	def __init__(self):
-		self.cfg = 'yolov3-tiny.cfg'
-		self.weights = 'best-tiny-all.pt'
-		self.classes = 1
-		self.names = 'three_signs.names'
+		self.cfg = rospy.get_param(rospy.get_name() + '/cfg')
+		self.weights = rospy.get_param(rospy.get_name() + '/weights')
+		self.classes = [0,1,2]
+		self.names = rospy.get_param(rospy.get_name() + '/names')
 		self.source = '////////////////////////////////'
 		self.output = '//////////////////////////////'
 		self.img_size = [640]
@@ -178,10 +164,10 @@ class options:
 		self.iou_thres = 0.6
 		self.fourcc = 'mp4v'
 		self.half = False
-		self.device = 'cpu'
-		self.view_img = True
+		self.device = ''
+		self.view_img = rospy.get_param(rospy.get_name() + '/view_img')
 		self.save_txt = False
-		self.agnostic_nms = False
+		self.agnostic_nms = True
 
 
 image_msg = None
@@ -195,7 +181,7 @@ def callback(msg):
 def img_publish(img):
 	try:
 		#Convert back to ROS format from CV and publish to the topic /myresult
-		image_pub.publish(bridge.cv2_to_imgmsg(img, 'bgr8'))
+		image_pub.publish(bridge.cv2_to_imgmsg(img, 'rgb8'))
 		#print('published')
 	except CvBridgeError as e:
 		print(e)
@@ -204,7 +190,7 @@ def img_publish(img):
 def box_publish(boxes):
 	msg = Int32MultiArray()
 	msg.layout.dim = [MultiArrayDimension(),MultiArrayDimension()]
-	n = 6
+	n = 7 #Gandalfs number
 	msg.layout.dim[0].label  = "n_boxes"
 	msg.layout.dim[0].size   = len(boxes)/n
 	msg.layout.dim[0].stride = len(boxes)

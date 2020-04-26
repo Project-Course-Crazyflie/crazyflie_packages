@@ -54,11 +54,11 @@ class NavigationServer:
             req.vel_thres = vel_thres
             req.vel_yaw_thres = vel_yaw_thres
             req.duration = duration
-            resp = self.navgoal_client(goal=goal, 
-                                       pos_thres=pos_thres, 
-                                       yaw_thres=yaw_thres, 
-                                       vel_thres=vel_thres, 
-                                       vel_yaw_thres=vel_yaw_thres, 
+            resp = self.navgoal_client(goal=goal,
+                                       pos_thres=pos_thres,
+                                       yaw_thres=yaw_thres,
+                                       vel_thres=vel_thres,
+                                       vel_yaw_thres=vel_yaw_thres,
                                        duration=float(duration))
             #resp = self.navgoal_client(req)
             return resp.at_goal
@@ -80,7 +80,7 @@ class NavigationServer:
         rospy.wait_for_service('cf1/navgoal/move_to')
         print("Planning")
         resp = self.plath_plan_client(start_pos, end_pos)
-        if not len(resp.path.poses): 
+        if not len(resp.path.poses):
             print("No path found!")
             return
 
@@ -100,7 +100,7 @@ class NavigationServer:
         resp = self.navgoal_call(end_pos, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
         print("Done")
         return resp
-        
+
 
     def move_to_callback(self, req):
         # Convenience method to be able to pusblish navgoal via the topic cf1/move_to without using the service
@@ -143,18 +143,18 @@ class NavigationServer:
         angle_inc = 2*np.pi/3
         goal = PoseStamped()
         goal.header.frame_id = "cf1/base_link"
-        (goal.pose.orientation.x, 
-         goal.pose.orientation.y, 
-         goal.pose.orientation.z, 
+        (goal.pose.orientation.x,
+         goal.pose.orientation.y,
+         goal.pose.orientation.z,
          goal.pose.orientation.w) = quaternion_from_euler(0, 0, angle_inc)
 
-         # in case of crazy drift during spin, we define final pose in 
+         # in case of crazy drift during spin, we define final pose in
          # map so that it returns to original pose (shouldnt be necessary irl)
         while not rospy.is_shutdown():
             try: final_pose = self.tf_buf.transform(self.cf1_pose, 'map')
             except: print("Can't transform cf1/pose to map yet...")
             else: break
-        
+
         # spin 2 thirds
         print("Spinning...")
         r1 = self.navgoal_call(goal, pos_thres=0.5, yaw_thres=0.5, vel_thres=1, vel_yaw_thres=100, duration=3.0)
@@ -169,7 +169,7 @@ class NavigationServer:
         return r3
 
     def marker_goal_callback(self, req):
-        
+
         # TODO: make useful for signs as well
         # Remove and use get_marker_goal instead?
         aruco_frame = "aruco/marker" + str(req.marker_id)
@@ -222,27 +222,35 @@ class NavigationServer:
         print("Moved to marker {}: {}".format(req.marker_id, resp.data))
         return resp
 
+
     def get_marker_goal(self, marker_id):
         # TODO: make useful for signs as well
-        aruco_frame = "aruco/marker" + str(marker_id)
+        if marker_id == 16:
+            object_frame = "sign/" + 'dangerous_curve_left'
+        elif marker_id == 17:
+            object_frame = "sign/" + 'no_bicycle'
+        elif marker_id == 18:
+            object_frame = "sign/" + 'warning_roundabout'
+        else:
+            object_frame = "aruco/marker" + str(marker_id)
 
         while not self.cf1_pose: rospy.loginfo("Waiting for cf1/pose...")
 
-        if not self.tf_buf.can_transform(aruco_frame, 'map', rospy.Time(0)):
-            rospy.logwarn_throttle(5.0, 'No transform from %s to map' % aruco_frame)
+        if not self.tf_buf.can_transform(object_frame, 'map', rospy.Time(0)):
+            rospy.logwarn_throttle(5.0, 'No transform from %s to map' % object_frame)
             return
 
         aruco_pose = PoseStamped()
-        aruco_pose.header.frame_id = aruco_frame
+        aruco_pose.header.frame_id = object_frame
         aruco_pose.header.stamp = rospy.Time.now()
         p0 = self.tf_buf.transform(aruco_pose, "map")
         aruco_pose.pose.position.y = rospy.get_param("navigation/dist_to_marker")
         p1 = self.tf_buf.transform(aruco_pose, "map")
 
         goal = PoseStamped()
-        goal.header.frame_id = aruco_frame
+        goal.header.frame_id = object_frame
 
-        q = self.yaw_towards_frame(p1, target_frame=aruco_frame)
+        q = self.yaw_towards_frame(p1, target_frame=object_frame)
 
         goal_map = PoseStamped()
         goal_map.header.stamp = rospy.Time.now()
@@ -258,16 +266,24 @@ class NavigationServer:
 
     def get_marker_pose(self, marker_id):
         # TODO: make useful for signs as well
-        aruco_frame = "aruco/marker" + str(marker_id)
+        if marker_id == 16:
+            object_frame = "sign/" + 'dangerous_curve_left'
+        elif marker_id == 17:
+            object_frame = "sign/" + 'no_bicycle'
+        elif marker_id == 18:
+            object_frame = "sign/" + 'warning_roundabout'
+        else:
+            object_frame = "aruco/marker" + str(marker_id)
 
         while not self.cf1_pose: rospy.loginfo("Waiting for cf1/pose...")
 
-        if not self.tf_buf.can_transform(aruco_frame, 'map', rospy.Time(0)):
-            rospy.logwarn_throttle(5.0, 'No transform from %s to map' % aruco_frame)
-            return
+        if not self.tf_buf.can_transform(object_frame, 'map', rospy.Time(0), rospy.Duration(1.0)):
+            rospy.logwarn_throttle(5.0, 'No transform from %s to map' % object_frame)
+            raise Exception("WTF?!?!?{}".format(object_frame))
+
 
         aruco_pose = PoseStamped()
-        aruco_pose.header.frame_id = aruco_frame
+        aruco_pose.header.frame_id = object_frame
         aruco_pose.header.stamp = rospy.Time.now()
         p0 = self.tf_buf.transform(aruco_pose, "map")
         return p0
