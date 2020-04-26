@@ -35,7 +35,7 @@ class StateMachine:
         PlanGoCheck - plan a path, go to marker, check it (spin)
         DoneState - land
         """
-        self.plath_plan_client = rospy.ServiceProxy('cf1/path_planning/plan', PlanPath)
+        self.path_plan_client = rospy.ServiceProxy('cf1/path_planning/plan', PlanPath)
         self.plan_and_follow_path_client = rospy.ServiceProxy('cf1/navigation/plan_and_follow_path', PlanAndFollowPath)
         self.takeoff_client = rospy.ServiceProxy("cf1/navigation/takeoff", TakeOff)
         self.land_client = rospy.ServiceProxy("cf1/navigation/land", Land)
@@ -43,30 +43,32 @@ class StateMachine:
         self.move_to_marker_client = rospy.ServiceProxy("cf1/navigation/move_to_marker", MoveToMarker)
 
         rospy.Subscriber("cf1/localization/measurement_feedback", Int32MultiArray, self.measurement_fb_callback)
-        self.measurement_fb_msg = None
+        self.measurement_fb_msg = []
 
         rospy.Subscriber("cf1/localization/converged", Bool, self.convergence_callback)
         self.convergence_msg = None
 
         self.checked_markers = []
-        self.unchecked_markers = [1, 2,3,4,5,6,7]
+        self.unchecked_markers = [17]
         self.current_state = None
 
     def measurement_fb_callback(self, msg):
-        self.measurement_fb_msg = msg
+        self.measurement_fb_msg.append(msg)
 
     def convergence_callback(self, msg):
         self.convergence_msg = msg
 
     def verify_marker(self, marker_id, duration):
-        self.measurement_fb_msg = None
+        self.measurement_fb_msg = []
         time_start = time.time()
         while not rospy.is_shutdown():
             if self.measurement_fb_msg:
-                corr_mark = self.measurement_fb_msg.data[0]
-                valid = self.measurement_fb_msg.data[1]
-                if corr_mark and valid:
-                    return True
+                for m in self.measurement_fb_msg:
+                    corr_mark = marker_id == m.data[0]
+                    valid = m.data[1]
+                    if corr_mark and valid:
+                        return True
+
             if (time.time()-time_start) > duration:
                 return False
 
@@ -88,6 +90,72 @@ class StateMachine:
                 print("Taking off")
                 self.takeoff_client()
                 #rospy.sleep(1) #pause remove
+                print("Localizing")
+                if not self.verify_convergence(5):
+                    print("Localization failed")
+                    state = "abort"
+                    continue
+                print("Localization complete!")
+                state = "go_to_next_marker"
+
+            if state == "go_to_next_marker":
+                if not self.unchecked_markers:
+                    state = "done"
+                    continue
+                marker = self.unchecked_markers.pop(0)
+                # do something with resp
+                print("Planning to marker {}".format(marker))
+                resp = self.plan_and_follow_path_client(marker)
+                """
+                while True:
+                    try:
+                        resp = self.plan_and_follow_path_client(marker)
+                        #rospy.sleep(1) #pause remove
+                    except:
+                        pass #print("Failed to plan...")
+                    else:
+                        break
+                """
+                print("Going to marker {}".format(marker))
+                # do something with resp
+                # verify that marker is detected
+                rospy.sleep(1)
+                print("Looking for marker {}".format(marker))
+                if self.verify_marker(marker, 3):
+                    print("Found it!")
+                else:
+                    print("Failed to find marker")
+                    state = "abort"
+                    continue
+                #rospy.sleep(1) #pause remove
+                print("Spinning")
+                resp = self.spin_client()
+                rospy.sleep(1)
+                print("Wait for convergence after spinning")
+                if not self.verify_convergence(5):
+                    print("Localization failed")
+                    state = "abort"
+
+            if state == "abort":
+                print("Aborting")
+                print("Landing")
+                self.land_client()
+                return
+
+            if state == "done":
+                print("Landing")
+                self.land_client()
+
+                print("State machine done!")
+                return
+
+    def run_test(self):
+        state = "init"
+        while not rospy.is_shutdown():
+            if state == "init":
+                print("Taking off")
+                #self.takeoff_client()
+                rospy.sleep(1) #pause remove
                 print("Localizing")
                 if not self.verify_convergence(10):
                     print("Localization failed")
@@ -116,7 +184,7 @@ class StateMachine:
                 # verify that marker is detected
                 rospy.sleep(1)
                 print("Looking for marker {}".format(marker))
-                if self.verify_marker(marker, 3):
+                if self.verify_marker(marker, 10):
                     print("Found it!")
                 else:
                     print("Failed to find marker")
@@ -124,22 +192,24 @@ class StateMachine:
                     continue
                 rospy.sleep(1) #pause remove
                 print("Spinning")
-                resp = self.spin_client()
+                #resp = self.spin_client()
                 rospy.sleep(1)
                 print("Wait for convergence after spinning")
-                if not self.verify_convergence(5):
+                if not self.verify_convergence(10):
                     print("Localization failed")
                     state = "abort"
 
             if state == "abort":
                 print("Aborting")
                 print("Landing")
-                self.land_client()
+                #self.land_client()
+                rospy.sleep(1)
                 return
 
             if state == "done":
                 print("Landing")
-                self.land_client()
+                #self.land_client()
+                rospy.sleep(1)
 
                 print("State machine done!")
                 return

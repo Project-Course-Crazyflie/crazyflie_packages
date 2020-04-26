@@ -44,7 +44,7 @@ def main():
 		"""
 		-----------------------------------------------------------------------------
 		"""
-		rate = rospy.Rate(10)
+		rate = rospy.Rate(3)
 		while not rospy.is_shutdown():
 			rate.sleep()
 
@@ -114,16 +114,23 @@ def main():
 							s += ' ' + str(int(n)) + ' ' + names[int(c)] + 's |'#'%g %ss, ' % (n, names[int(c)])  # add number of 'name's to string
 
 						for A in det:
-							conf = A[0]
+							conf = A[4]
 							cls = A[-1]
 							xyxy = A[:4]
+							print('xyxy: ', xyxy)
+							if any(xyxy[2:] <= 1):
+								if len(det) == 1:
+									detected = False
+									break
+								continue
 							if view_img:  # Add bbox to image and send to /boxed_image
 								label = names[int(c)] + str(conf)#'%s %.2f' % (names[int(cls)], conf)
 								im0 = plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
 							conf = A[4]
 							(centerX, centerY, width, height) = xyxy
-							cboxes.extend([centerX, centerY, cls, height, width, stamp, stamp_ns])
+							print('cls: ' + str(cls))
+							cboxes.extend([int(centerX), int(centerY), int(cls), int(height), int(width), stamp, stamp_ns])
 
 				if detected:
 
@@ -146,10 +153,10 @@ def main():
 
 class options:
 	def __init__(self):
-		self.cfg = 'yolov3-tiny.cfg'
-		self.weights = 'best-tiny-all.pt'
+		self.cfg = rospy.get_param(rospy.get_name() + '/cfg')
+		self.weights = rospy.get_param(rospy.get_name() + '/weights')
 		self.classes = [0,1,2]
-		self.names = 'three_signs.names'
+		self.names = rospy.get_param(rospy.get_name() + '/names')
 		self.source = '////////////////////////////////'
 		self.output = '//////////////////////////////'
 		self.img_size = [640]
@@ -158,7 +165,7 @@ class options:
 		self.fourcc = 'mp4v'
 		self.half = False
 		self.device = ''
-		self.view_img = True
+		self.view_img = rospy.get_param(rospy.get_name() + '/view_img')
 		self.save_txt = False
 		self.agnostic_nms = True
 
@@ -183,7 +190,7 @@ def img_publish(img):
 def box_publish(boxes):
 	msg = Int32MultiArray()
 	msg.layout.dim = [MultiArrayDimension(),MultiArrayDimension()]
-	n = 6
+	n = 7 #Gandalfs number
 	msg.layout.dim[0].label  = "n_boxes"
 	msg.layout.dim[0].size   = len(boxes)/n
 	msg.layout.dim[0].stride = len(boxes)

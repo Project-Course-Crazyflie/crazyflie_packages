@@ -29,8 +29,10 @@ def callback_pose(msg):
 	return
 
 def publish_sign_id(id):
-	sign_pub.publish(id+10)
-	
+	msg = Int32MultiArray()
+	msg.data = [id+16, 1]
+	sign_pub.publish(msg)
+
 rospy.init_node("sign_tf")
 box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback_box)
 pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, callback_pose)
@@ -53,7 +55,7 @@ rospy.loginfo('reading label file: '+label_file_name)
 with open(label_file_name, 'rb') as f:
 	labels = f.read().strip().split("\n")
 	rospy.loginfo('reading labels:')
-	
+print(labels)
 fy = 220.72391163
 fx = 221.88078347
 real_size = world['roadsign_size'][0]
@@ -66,7 +68,7 @@ def main():
 	while not rospy.is_shutdown():
 		if boxes_msg:
 			boxes = boxes_msg
-			n = boxes.layout.dim[1].size  #7: [centerX, centerY, id(14 now), height, width, stamp, stamp_ns]
+			n = boxes.layout.dim[1].size  #7: [centerX, centerY, id, height, width, stamp, stamp_ns]
 			boxes_msg = None
 
 			#calculate the complete tf of the object(s)
@@ -83,13 +85,19 @@ def main():
 				p.pose.position.z = Z
 				p.pose.position.x = (boxes.data[n*i]-W/2)*Z/fx
 				p.pose.position.y = (boxes.data[n*i+1]-H/2)*Z/fy
- 
+
+				(p.pose.orientation.x,
+				 p.pose.orientation.y,
+				 p.pose.orientation.z,
+				 p.pose.orientation.w) = (0, 0, 0, 1)
+
 				sign_id = boxes.data[n*i+2]
+				print('sign_id: ' + str(sign_id))
 				sign_class = labels[sign_id]
 				publish_sign_id(sign_id)
 				#rospy.logwarn((boxes.data[n*i+4])*p.pose.position.z/fx)
 				#rospy.logwarn(real_size)
-
+				"""
 				width_world = (boxes.data[n*i+4])*Z/fx
 				rospy.logwarn("width : {}".format(width_world))
 				if Z < width_world/2 :
@@ -101,7 +109,7 @@ def main():
 				# 																					pose_msg.pose.orientation.y,
 				# 																					pose_msg.pose.orientation.z,
 				# 																					pose_msg.pose.orientation.w])[2]
-				
+
 				rospy.logwarn('yaw detected : {}'.format(yaw_detected))
 
 				#find orientation:
@@ -113,7 +121,7 @@ def main():
 						rate.sleep()
 						continue
 
-					
+
 					yaw_map = euler_from_quaternion([trans.transform.rotation.x,
 														trans.transform.rotation.y,
 														trans.transform.rotation.z,
@@ -137,12 +145,12 @@ def main():
 				if not tf_buf.can_transform('map', 'cf1/camera_link', rospy.Time(0)):
 					rospy.logwarn_throttle(5.0, 'No transform from cf1/camera_link to map')
 					return
-
-				p = tf_buf.transform(p, 'map')
+				"""
+				#p = tf_buf.transform(p, 'map')
 
 				t = TransformStamped()
 				t.header.stamp = p.header.stamp
-				t.header.frame_id = 'map'
+				t.header.frame_id = 'cf1/camera_link'
 				t.child_frame_id = 'sign_dectected/' + labels[boxes.data[n*i+2]]
 				t.transform.translation = p.pose.position
 				t.transform.rotation = p.pose.orientation

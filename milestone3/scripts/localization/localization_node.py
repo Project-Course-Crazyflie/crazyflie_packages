@@ -34,7 +34,7 @@ class KalmanFilter:
         self.prev_cov = self.cov.copy()
 
     def reset(self):
-        self.cov = self.initial_cov.copy()        
+        self.cov = self.initial_cov.copy()
 
     def has_converged(self):
         return np.linalg.norm(self.cov) < self.cov_norm_thres
@@ -59,7 +59,7 @@ class KalmanFilter:
         return valids, K, new_belief
 
     def handle_measurement(self, belief, measurement, Q):
-        """returns Kalman 
+        """returns Kalman
         """
         innovation = self.innovation(belief, measurement)
         valid = self.maha_dist(innovation, Q) < self.maha_dist_thres
@@ -103,7 +103,7 @@ class KalmanFilter:
 
         rot = belief[3:] + innovation[3:]*K[3:]
         rot = (rot + np.pi) % (2*np.pi) - np.pi
-        
+
         return np.concatenate([pos, rot])
 
     def predict(self, A, v=None):
@@ -122,7 +122,8 @@ class MapOdomUpdate:
     def __init__(self, init_trans, update_freq):
         rospy.Subscriber('aruco/markers', MarkerArray, self.update_callback)
         #rospy.Subscriber('sign_pose', MarkerArray, self.update_callback)
-        
+        #rospy.Subscriber('marker_measurements', MarkerArray, self.update_callback)
+
         rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
         rospy.Subscriber("cf1/velocity", TwistStamped, self.cf1_vel_callback)
         self.cf1_pose_cov_pub = rospy.Publisher("cf1/localizatiton/pose_cov", PoseWithCovarianceStamped, queue_size=1)
@@ -144,9 +145,9 @@ class MapOdomUpdate:
         self.tf_lstn = tf2_ros.TransformListener(self.tf_buf, queue_size=1) # should there be a queue_size?
         self.broadcaster = tf2_ros.TransformBroadcaster()
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster()
-       
+
         self.update_freq = update_freq
-        self.kf = KalmanFilter(initial_cov=np.diag(rospy.get_param("localization/initial_cov")), 
+        self.kf = KalmanFilter(initial_cov=np.diag(rospy.get_param("localization/initial_cov")),
                                R=np.diag(rospy.get_param("localization/process_noise")),
                                maha_dist_thres= rospy.get_param("localization/maha_dist_thres"),
                                cov_norm_thres=rospy.get_param("localization/cov_norm_thres"),
@@ -155,7 +156,7 @@ class MapOdomUpdate:
         self.maha_dist_thres = rospy.get_param("localization/maha_dist_thres")
         self.cov_norm_thres =  rospy.get_param("localization/cov_norm_thres")
 
-        self.converged_pub = rospy.Publisher("cf1/localization/converged", Bool, queue_size=1)  
+        self.converged_pub = rospy.Publisher("cf1/localization/converged", Bool, queue_size=1)
         self.measurement_fb_pub = rospy.Publisher("cf1/localization/measurement_feedback", Int32MultiArray, queue_size=1)
 
         self.odom_new_pub = rospy.Publisher("cf1/pose/odom_new", PoseStamped, queue_size=1)
@@ -167,44 +168,45 @@ class MapOdomUpdate:
         rospy.Service("cf1/localization/reset_kalman_filter", ResetKalmanFilter, self.reset_kalman_filter)
 
     def spin(self):
+
         rate = rospy.Rate(self.update_freq)
         self.has_transformed = False # to check if initial transform with kalman gain 1 result in good transform
         while not rospy.is_shutdown():
-
             self.broadcaster.sendTransform(self.last_transform)
             self.last_transform.header.stamp = rospy.Time.now()
-            
+
             A = np.diag([1, 1, 1, 1, 1, 1])
-            if self.cf1_vel:
+            if False:#self.cf1_vel:
                 v = np.array([self.cf1_vel.twist.linear.x,
                               self.cf1_vel.twist.linear.y,
                               self.cf1_vel.twist.linear.z,
                               self.cf1_vel.twist.angular.x,
                               self.cf1_vel.twist.angular.y,
                               self.cf1_vel.twist.angular.z])
-                
+
                 self.kf.predict(A, v)
             else:
                 self.kf.predict(A)
 
             if self.measurement_msg:
                 map_to_odom = self.update(self.measurement_msg)
-                if map_to_odom: 
+                if map_to_odom:
                     self.last_transform = map_to_odom
 
             self.converged_pub.publish(Bool(self.kf.has_converged()))
 
-            if self.cf1_pose: 
+            if self.cf1_pose:
                 p = PoseWithCovarianceStamped()
                 p.header = self.cf1_pose.header
                 p.pose.pose = self.cf1_pose.pose
-                self.tf_buf.transform(p, "map")
+                #self.tf_buf.transform(p, "map")
                 p.pose.covariance[0] = self.kf.cov[0][0] # x
                 p.pose.covariance[1] = self.kf.cov[0][1] # xy
                 p.pose.covariance[6] = self.kf.cov[1][0] # yx
                 p.pose.covariance[7] = self.kf.cov[1][1] # y
                 p.pose.covariance[-1] = self.kf.cov[5][5] # z angle
                 self.cf1_pose_cov_pub.publish(p)
+
             rate.sleep()
 
     def reset_kalman_filter(self, _):
@@ -216,7 +218,7 @@ class MapOdomUpdate:
 
     def cf1_vel_callback(self, msg):
         self.cf1_vel = msg
-        
+
     def update_callback(self, m_array):
         if self.measurement_msg != m_array:
             self.measurement_msg = m_array
@@ -226,11 +228,11 @@ class MapOdomUpdate:
         Giving kalman filter the responsibility to handle measurements
         """
         if self.old_msg == m_array:
-            # Message old 
+            # Message old
             return
         self.old_msg = m_array
-        
-        
+
+
         try:
             believed_trans = self.tf_buf.lookup_transform("map", "cf1/base_link", rospy.Time(0))
         except:
@@ -250,7 +252,7 @@ class MapOdomUpdate:
         for marker in m_array.markers:
             # TODO: make this general (no hardcoded Qs)
             Q = np.diag([0.3, 0.3, 0.3, 0.1, 0.1, 0.01])
-            
+
             measured_pose = self.get_measured_pose_filtered(believed_pose, marker)
             measured_state = self.pose_stamped_to_state(measured_pose)
             measured_poses.append(measured_pose.pose)
@@ -272,7 +274,7 @@ class MapOdomUpdate:
                 measured_valid_poses.poses.append(meas_pose)
             else:
                 measured_invalid_poses.poses.append(meas_pose)
-            
+
         self.measured_valid_pub.publish(measured_valid_poses) # visualization
         self.measured_invalid_pub.publish(measured_invalid_poses) # visualization
 
@@ -289,10 +291,10 @@ class MapOdomUpdate:
         Old working version
         """
         if self.old_msg == m_array:
-            # Message old 
+            # Message old
             return
         self.old_msg = m_array
-        
+
         kalman_gains = []
         filtered_poses = []
         measured_valid_poses = PoseArray()
@@ -324,11 +326,13 @@ class MapOdomUpdate:
 
             valid, K, filtered_state = self.kf.handle_measurement(believed_state, measured_state, Q)
             # for testing with K=1
+
+            #valid = True
             #filtered_state = believed_state + self.kf.innovation(believed_state, measured_state)*1
 
             measurement_fb.data = [marker.id, int(valid)]
             self.measurement_fb_pub.publish(measurement_fb)
-            if valid: 
+            if valid:
                 kalman_gains.append(K)
                 measured_valid_poses.poses.append(measured_pose.pose)
                 filtered_pose = self.state_to_pose_stamped(filtered_state, believed_pose.header.frame_id, time_stamp)
@@ -340,7 +344,7 @@ class MapOdomUpdate:
         self.measured_valid_pub.publish(measured_valid_poses) # visualization
         self.measured_invalid_pub.publish(measured_invalid_poses) # visualization
 
-        print("Using {}/{} markers measurements".format(len(filtered_poses), n_markers))
+        #print("Using {}/{} markers measurements".format(len(filtered_poses), n_markers))
         if len(filtered_poses) > 0:
             K = sum(kalman_gains)/len(filtered_poses)
             self.kf.update_with_gain(K)
@@ -350,14 +354,14 @@ class MapOdomUpdate:
 
             #print("Updated")
             return map_to_odom
-   
+
     def get_measured_pose_filtered(self, believed_pose, marker):
         time_stamp = believed_pose.header.stamp
         frame_detected = "tjululu/detected" + str(marker.id)
         frame_marker = "aruco/marker" + str(marker.id)
         t = self.transform_from_marker(marker, frame_detected, time_stamp)
         self.tf_buf.set_transform(t, "gandalfs_authority")
-        self.broadcaster.sendTransform(t) # for vizualization
+        #self.broadcaster.sendTransform(t) # for vizualization
         measured_orientation = self.get_map_to_map_detected_rotation(frame_marker, frame_detected, time_stamp)
 
         # Disregard rotational diplacement of marker detection
@@ -376,7 +380,7 @@ class MapOdomUpdate:
         map_to_marker.header.stamp = time_stamp
         map_to_marker.transform.rotation = Quaternion(*[0,0,0,1])
         self.tf_buf.set_transform(map_to_marker, "gandalfs_authority")
-        self.broadcaster.sendTransform(map_to_marker) # for visualization
+        #self.broadcaster.sendTransform(map_to_marker) # for visualization
 
         detected_map_frame = frame_detected + "_map_reference"
         # not use _core here?
@@ -389,7 +393,7 @@ class MapOdomUpdate:
         if not self.filter_config[2]: map_to_detected.transform.translation.z = map_to_marker.transform.translation.z
         map_to_detected.transform.rotation = measured_orientation
         self.tf_buf.set_transform(map_to_detected, "gandalfs_authority")
-        self.broadcaster.sendTransform(map_to_detected) # for visualization
+        #self.broadcaster.sendTransform(map_to_detected) # for visualization
 
         pose_in_detected = self.tf_buf.transform(believed_pose, detected_map_frame)
 
@@ -398,7 +402,7 @@ class MapOdomUpdate:
         measured_pose = self.tf_buf.transform(pose_in_marker, believed_pose.header.frame_id)
 
         # visualization
-        
+
         #map_to_marker = self.tf_buf.lookup_transform_core("map", frame_marker, time_stamp)
         #marker_to_detected = self.tf_buf.lookup_transform_core(marker_map_frame, detected_map_frame, time_stamp)
         #map_to_detected = self.tf_buf.lookup_transform_core("map", frame_detected, time_stamp)
@@ -416,7 +420,7 @@ class MapOdomUpdate:
         #q = quaternion_multiply(q1, q2)
         #filt_det.transform.rotation = Quaternion(*q)
         #self.broadcaster.sendTransform(filt_det)
-        
+
         # end visualization
 
         return self.tf_buf.transform(measured_pose, "map")
@@ -447,7 +451,7 @@ class MapOdomUpdate:
 
         rotation = quaternion_multiply(marker_to_detected_rot, map_to_marker_rot)
         rotation = quaternion_multiply(detected_to_map_detected, rotation)
-        
+
         return Quaternion(*rotation)
 
     def filter_state(self, believed_state, measured_state, K):
@@ -458,13 +462,13 @@ class MapOdomUpdate:
         rot = (rot + np.pi) % (2*np.pi) - np.pi
         rot = believed_state[3:] + rot*K[3:]
         rot = (rot + np.pi) % (2*np.pi) - np.pi
-        
+
         return np.concatenate([pos, rot])
 
     def pose_stamped_to_state(self, pose):
-        rx, ry, rz = euler_from_quaternion([pose.pose.orientation.x, 
-                                            pose.pose.orientation.y, 
-                                            pose.pose.orientation.z, 
+        rx, ry, rz = euler_from_quaternion([pose.pose.orientation.x,
+                                            pose.pose.orientation.y,
+                                            pose.pose.orientation.z,
                                             pose.pose.orientation.w])
         return np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z, rx, ry, rz])
 
@@ -538,7 +542,7 @@ class MapOdomUpdate:
 
 if __name__ == '__main__':
     rospy.init_node('update_map_to_odom')
-    
+
     init_trans_ls = rospy.get_param("localization/initial_map_to_odom")
     #init_trans_ls = [float(s.strip()) for s in init_trans_str.split()]
     init_t = TransformStamped()
@@ -546,16 +550,16 @@ if __name__ == '__main__':
     init_t.transform.translation.y = init_trans_ls[1]
     init_t.transform.translation.z = init_trans_ls[2]
 
-    (init_t.transform.rotation.x, 
-    init_t.transform.rotation.y, 
-    init_t.transform.rotation.z, 
-    init_t.transform.rotation.w) = quaternion_from_euler(init_trans_ls[3], 
-                                                         init_trans_ls[4], 
+    (init_t.transform.rotation.x,
+    init_t.transform.rotation.y,
+    init_t.transform.rotation.z,
+    init_t.transform.rotation.w) = quaternion_from_euler(init_trans_ls[3],
+                                                         init_trans_ls[4],
                                                          init_trans_ls[5])
 
 
     # update freq should be high (at least > 20 Hz) so transforms don't get extrapolation errors in other files
     # OBS: high frequency requires outlier detection for the kalman filter to work (high freq detects noisy measurements)
     p = MapOdomUpdate(init_trans=init_t, update_freq=40)
-    
+
     p.spin()

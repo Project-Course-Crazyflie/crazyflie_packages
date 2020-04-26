@@ -13,6 +13,8 @@ localization:
     measurement_config: [true, true, false,   # translation x,y,z
                          false, false, true] # rotation roll,pitch,yaw
     initial_map_to_odom: [1, 1, 0, 0, 0, 1.57] # [x,y,z,roll,pitch,yaw]
+    aruco_cov: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1] # not used right now
+    sign_cov: [0.1, 0.1, 0.1, -1, -1, -1] # not used right now
 perception:
     todo: "TODO"
 

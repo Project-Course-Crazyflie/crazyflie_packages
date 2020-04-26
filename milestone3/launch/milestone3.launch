@@ -12,7 +12,7 @@
     <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_cam_trans" args="0.01 0 0.02 -1.57 0 -1.57 cf1/base_link cf1/camera_link">
     </node>
 
-    <node pkg="milestone3" type="update_map_to_odom_pose_update_v5.py" name="map_to_odom_publisher">
+    <node pkg="milestone3" type="localization_node.py" name="localization_node">
         <param name="initial_map_to_odom" value="$(arg initial_map_to_odom)"/>
     </node>
 
