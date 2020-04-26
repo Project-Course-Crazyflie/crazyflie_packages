@@ -56,10 +56,11 @@ with open(label_file_name, 'rb') as f:
 	labels = f.read().strip().split("\n")
 	rospy.loginfo('reading labels:')
 print(labels)
-fy = 220.72391163
-fx = 221.88078347
+
+fx, fy = rospy.get_param("perception/focal")  #221.88078347, 220.72391163
+ 
 real_size = world['roadsign_size'][0]
-H, W = 480,640 #446, 332  #size of undist images
+H, W = rospy.get_param("perception/fimg_size")[0]  #480,640 or 446, 332 for undist images| use [1]
 
 
 def main():

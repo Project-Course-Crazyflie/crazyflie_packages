@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+import numpy as np
+
+import roslib
+import rospy
+import json
+import tf2_ros
+import tf2_msgs
+import math
+import tf2_geometry_msgs
+from std_msgs.msg import Int32MultiArray
+from geometry_msgs.msg import PoseWithCovariance, Vector3
+from tf2_geometry_msgs import PoseStamped 
+from aruco_msgs.msg import MarkerArray, Marker
+from tf.transformations import quaternion_from_euler,euler_from_quaternion
+
+
+boxes_msg = None
+aruco_msg = None
+
+def callback_box(msg):
+	global boxes_msg
+	boxes_msg = msg
+	return
+
+def callback_aruco(msg):
+	global aruco_msg
+	aruco_msg = msg
+	return
+
+def publish_sign(msg):
+	sign_pub.publish_sign(msg)
+	return
+
+def publish_aruco(msg):
+	aruco_pub.publish_aruco(msg)
+	return
+
+"""
+def pose_from_sign(m):
+    p = PoseStamped()
+    p.header.frame_id =  'sign/' + m['sign']
+    p.pose.translation = Vector3(*m['pose']['position'])
+    roll, pitch, yaw = m['pose']['orientation']
+    (p.pose.rotation.x,
+     p.pose.rotation.y,
+     p.pose.rotation.z,
+     p.pose.rotation.w) = quaternion_from_euler(math.radians(roll),
+                                                     math.radians(pitch),
+                                                     math.radians(yaw))
+    return p
+"""
+
+rospy.init_node("object_poser")
+rospy.Subscriber('aruco/markers', MarkerArray, callback_aruco)
+rospy.Subscriber('sign_box', Int32MultiArray, callback_box)
+sign_pub = rospy.Publisher('sign_pose', MarkerArray, queue_size=10)
+aruco_pub = rospy.Publisher('aruco_pose', MarkerArray, queue_size=10)
+
+
+#get all the signs in the map
+w_name = rospy.get_param(rospy.get_name() + "/world_name")
+with open(w_name, 'rb') as f:
+	world = json.load(f)
+signs = [s['sign'] for s in world['roadsigns']]
+
+labels = rospy.get_param(rospy.get_name() + '/labels')
+LABELS = open(labels).read().strip().split("\n")
+
+fx, fy = rospy.get_param("perception/focal")  #221.88078347, 220.72391163
+ 
+real_size = world['roadsign_size'][0]
+H, W = rospy.get_param("perception/fimg_size")[0]  #480,640 or 446, 332 for undist images| use [1]
+
+
+
+def main():
+	global boxes_msg
+	global aruco_msg
+	rate = rospy.Rate(10) #Hz
+
+	while not rospy.is_shutdown():
+		if boxes_msg:
+			boxes = boxes_msg
+			boxes_msg = None
+			
+			n = boxes.layout.dim[1].size  #7: [centerX, centerY, id(14 now), height, width, stamp, stamp_ns]
+			#calculate the complete pose of the object(s)
+			markers = []
+			for i in range(boxes.layout.dim[0].size):
+				m = Marker()
+				m_class = LABELS[boxes.data[n*i+2]]
+
+				m.header.frame_id = "cf1/camera_link"
+				m.header.stamp.secs = boxes.data[n*i+5]
+				m.header.stamp.nsecs = boxes.data[n*i+6]
+				p = PoseWithCovariance()
+
+				#find the depth of found object(s)
+				Z = fy*real_size/(boxes.data[n*i+3])
+				p.pose.position.z = Z
+				p.pose.position.x = (boxes.data[n*i]-W/2)*Z/fx
+				p.pose.position.y = (boxes.data[n*i+1]-H/2)*Z/fy
+
+				#Set covariance 
+				p.pose.covariance = np.diag(rospy.get_param("perception/sign_cov"))
+
+				#set the frame orientation
+				p.pose.orientation.w = 1
+
+				m.pose = p
+				markers.append(m)
+				
+			sign_poses = MarkerArray()
+			sign_poses.header.frame_id = "cf1/camera_link"
+			sign_poses.header.stamp = rospy.Time.now()
+			sign_poses.markers = markers
+			publish_sign(sign_poses)
+
+		if aruco_msg:
+			aruco = aruco_msg
+			aruco_msg = None
+
+			for i in range(len(aruco.markers)):
+				aruco.markers.pose.covariance = np.diag(rospy.get_param("perception/aruco_cov"))
+
+			publish_aruco(aruco)
+
+		rate.sleep()
+	return
+
+if __name__ == '__main__':
+	main()
