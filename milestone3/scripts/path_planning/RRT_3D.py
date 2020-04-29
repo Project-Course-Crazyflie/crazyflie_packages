@@ -133,9 +133,6 @@ class RRT:
 	def steer(self, from_node, to_node, expand_rho = float('inf')):
 		new_node = self.RRTnode(from_node.x, from_node.y, from_node.z, from_node.yaw)
 		to_distance, yaw = self.distance_and_angle(new_node, to_node)
-		step_z = self.path_resolution
-		#print('new: ', str(new_node.z))
-		#print('to: ', str(to_node.z))
 
 		new_node.x_path = [new_node.x]
 		new_node.y_path = [new_node.y]
@@ -148,16 +145,12 @@ class RRT:
 		#floor: returns the floor of x as a float. Largest integer leq x
 		node_expand = math.floor(expand_rho/self.path_resolution)
 
-		if from_node.z > to_node.z:
-			step_z = -self.path_resolution
-
 		for _ in range(int(node_expand)):
-			new_node.x += self.path_resolution * math.cos(yaw)
-			new_node.y += self.path_resolution * math.sin(yaw)
-			new_node.z += step_z
+			new_node.x += ((to_node.x - from_node.x)*self.path_resolution)/to_distance
+			new_node.y += ((to_node.y - from_node.y)*self.path_resolution)/to_distance
+			new_node.z += ((to_node.z - from_node.z)*self.path_resolution)/to_distance
 
 			new_node.yaw += self.path_resolution * math.tan(yaw)
-
 
 			#Append the new coordinates to the path list
 			new_node.x_path.append(new_node.x)
