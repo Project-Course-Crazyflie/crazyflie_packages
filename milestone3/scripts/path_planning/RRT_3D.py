@@ -31,13 +31,13 @@ from mpl_toolkits import mplot3d
 
 
 #lower bounds
-xlb = -10
-ylb = -10
+xlb = 0
+ylb = 0
 zlb = 0
 #Upper bound
-xub = 10
-yub = 10
-zub = 5
+xub = 2.04
+yub = 4
+zub = 2
 
 
 animation = True
@@ -64,8 +64,8 @@ class RRT:
 			self.parent = None
 
 	def __init__(self, start_point, goal_point, obstacles, sample_rate, \
-				 rho=0.6, path_resolution=0.1):
-		
+				 rho=0.25, path_resolution=0.1):
+
 		self.start_node = self.RRTnode(start_point[0], start_point[1], start_point[2])
 		self.goal_node = self.RRTnode(goal_point[0], goal_point[1], goal_point[2])
 		self.start_node.x_path = [self.start_node.x]
@@ -78,7 +78,7 @@ class RRT:
 		self.path_resolution = path_resolution
 		self. sample_rate = sample_rate
 		self.node_list = []
-	
+
 	def rrt_planning(self, animation=True):
 		self.node_list = [self.start_node]
 		is_planning = True
@@ -99,7 +99,7 @@ class RRT:
 			#print("steering")
 			if self.safe(new_node, self.obstacles) == True:
 				self.node_list.append(new_node)
-			
+
 
 			if animation and i%5 == 0:
 				self.draw_graph(random_node)
@@ -111,25 +111,25 @@ class RRT:
 				if self.safe(final_node, self.obstacles) == True:
 					is_planning = False
 					return self.generate_final_course(len(self.node_list) - 1)
-			
+
 			if animation and i%5:
 				self.draw_graph(random_node)
 				i -= 1
-			
+
 		return None #Cannot find path
 
-	
+
 	def generate_random_node(self):
 		if randint(0, 50) > self.sample_rate:
 			random_node = self.RRTnode(uniform(self.min_rand_area[0], self.max_rand_area[0]), \
 										uniform(self.min_rand_area[1], self.max_rand_area[1]),\
 										uniform(self.min_rand_area[2], self.max_rand_area[2]))
-		
+
 		else: #weight towards goal with sample rate
 			random_node = self.RRTnode(self.goal_node.x, self.goal_node.y, self.goal_node.z, self.goal_node.yaw)
-		
+
 		return random_node
-	
+
 	def steer(self, from_node, to_node, expand_rho = float('inf')):
 		new_node = self.RRTnode(from_node.x, from_node.y, from_node.z, from_node.yaw)
 		to_distance, yaw = self.distance_and_angle(new_node, to_node)
@@ -141,7 +141,7 @@ class RRT:
 
 		if expand_rho > to_distance:
 			expand_rho = to_distance
-		
+
 		#floor: returns the floor of x as a float. Largest integer leq x
 		node_expand = math.floor(expand_rho/self.path_resolution)
 
@@ -169,18 +169,18 @@ class RRT:
 		new_node.parent = from_node
 
 		return new_node
-	
+
 	def generate_final_course(self, goal_index):
 		path = [[self.goal_node.x, self.goal_node.y, self.goal_node.z]]
 		node = self.node_list[goal_index]
-		
+
 		#Backtrack to generate final path
 		while node.parent is not None:
 			path.append([node.x, node.y, node.z])
 			node = node.parent
-		
+
 		return path
-	
+
 	def draw_graph(self, rnd=None):
 		"""
 
@@ -203,7 +203,7 @@ class RRT:
 		for o in self.obstacles:
 			xx, yy = o.exterior.xy
 			plt.fill(xx, yy)
-		
+
 
 		plt.plot(self.start_node.x, self.start_node.y, self.start_node.z, "xr")
 		plt.plot(self.goal_node.x, self.goal_node.y, self.goal_node.z, "xr")
@@ -220,7 +220,7 @@ class RRT:
 				3D PLOTTING
 		----------------------------
 		"""
-		
+
 		fig = plt.axes(projection="3d")
 
 		if rnd is not None:
@@ -228,7 +228,7 @@ class RRT:
 		for node in self.node_list:
 			if node.parent:
 				fig.plot3D(node.x_path, node.y_path, node.z_path, "-g")
-		
+
 		for o in self.obstacles:
 			start = o[0]
 			stop = o[1]
@@ -246,7 +246,7 @@ class RRT:
 			yy = (-normal[0]*xx - normal[2]*zz - d)*1./normal[1]
 
 			fig.plot_surface(xx, yy, zz)
-		
+
 		fig.scatter(self.start_node.x, self.start_node.y, self.start_node.z, "xr")
 		fig.scatter(self.goal_node.x, self.goal_node.y, self.goal_node.z, "xr")
 		fig.set_xlim3d(self.min_rand_area[0], self.max_rand_area[0])
@@ -257,11 +257,11 @@ class RRT:
 
 
 	def calculate_distance_to_goal(self, x, y, z):
-		
+
 		distx_g = x - self.goal_node.x
 		disty_g = y - self.goal_node.y
 		distz_g = z - self.goal_node.z
-		
+
 		distance_g = math.sqrt(distx_g**2 + disty_g**2 + distz_g**2)
 
 		return distance_g
@@ -316,14 +316,14 @@ class RRT:
 
 			for xx, yy, zz in zip(node.x_path, node.y_path, node.z_path):
 				point = np.array([xx, yy, zz])
-				
+
 				check_plane = np.dot(point, normal) + d
 
 				point_plane_distance = abs((np.dot(normal, point) + d)/math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2))
 				#print("distance: " + str(point_plane_distance))
 				if check_plane == 0.0 or point_plane_distance < 0.1:
 					return False #point in plane, collision
-		
+
 		return True #safe
 
 
@@ -337,7 +337,7 @@ class RRT:
 		#from_vec = [from_node.x, from_node.y, from_node.z]
 		#to_vec = [to_node.x, to_node.y, to_node.z]
 		#print(from_vec)
-		
+
 
 		#from_vec_unit = from_vec/np.linalg.norm(from_vec)
 		#to_vec_unit = to_vec/np.linalg.norm(to_vec)
@@ -347,7 +347,7 @@ class RRT:
 
 		#cos_yaw_3d = np.dot(from_vec, to_vec)/(np.linalg.norm(from_vec)*np.linalg.norm(to_vec))
 		#yaw_3d = np.arccos(dot)
-		
+
 		yaw = math.atan2(disty, distx)
 
 		return dist, yaw
@@ -355,17 +355,17 @@ class RRT:
 	@staticmethod
 	def nearest_node_index(node_list, random_node):
 		#calculate nearest index
-		
+
 		distance_list = [(node.x - random_node.x)**2 + (node.y - random_node.y)**2 + (node.z - random_node.z)**2 for node in node_list]
 		nearest_node_index = distance_list.index(min(distance_list))
-		
+
 		return nearest_node_index
 
 def main(): #argv = sys.argv):
 	global world
 	"""
 	rospy.init_node('RRT')
-  
+
 	args = rospy.myargv(argv=argv)
 	# Load world JSON
 	w_name = rospy.get_param(rospy.get_name() + "/world_name")
@@ -375,17 +375,17 @@ def main(): #argv = sys.argv):
 		world = json.load(f)
 
 	"""
-	mapFilePath = "tutorial_1.world.json"#"../../maps/tutorial_1.world.json"
+	mapFilePath = "../../maps/gandalfs_room.world.json"#"../../maps/tutorial_1.world.json"
 	mapString = ""
 
 	with open(os.path.join(os.path.dirname(__file__), mapFilePath), "r") as file:
 		for line in file:  #for each row
 			l = line.strip().replace(" ", "")  #remove all blankspace
 			mapString += l
-	
-	
+
+
 	world = ast.literal_eval(mapString)#convert string representation of read file into dictionary through some kind of black magic
-	
+
 
 	#plot_walls_list = []
 	#plot_dilated_walls = []
@@ -399,7 +399,7 @@ def main(): #argv = sys.argv):
 		#plot_dilated_walls.append(plot_walls_list[i].buffer(0.1))
 	#print(walls)
 
-	rrt = RRT(start_point=[2.0, 2.0, 2.0], goal_point=[3.0, 3.0, 3.0], obstacles=walls, sample_rate=5)
+	rrt = RRT(start_point=[0.7, 3.3, 0.5], goal_point=[2.0, 1.5, 1.1], obstacles=walls, sample_rate=5)
 	path = rrt.rrt_planning(animation)
 	print(path)
 
@@ -418,5 +418,5 @@ if __name__ == '__main__':
 	main()
 
 """
-NOTES: The final path is not plotted and the walls are not plotted correctly. Also for the obstacle avoidance do a point/plane saftey distance. Change the path resolution and rho 
+NOTES: The final path is not plotted and the walls are not plotted correctly. Also for the obstacle avoidance do a point/plane saftey distance. Change the path resolution and rho
 """

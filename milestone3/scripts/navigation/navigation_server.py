@@ -30,6 +30,7 @@ class NavigationServer:
 
         self.plath_plan_client = rospy.ServiceProxy('cf1/path_planning/plan', PlanPath)
         self.navgoal_client = rospy.ServiceProxy('cf1/navgoal/move_to', MoveTo)
+        self.navgoal_emergency_client = rospy.ServiceProxy('cf1/navgoal/move_to_emergency', EmergencyMoveTo)
         self.stop_pub = rospy.Publisher("cf1/navgoal/stop", Empty, queue_size=1)
 
         rospy.Subscriber('move_base_simple/goal', PoseStamped, self.move_to_callback)
@@ -42,7 +43,7 @@ class NavigationServer:
     def cf1_pose_callback(self, pose):
         self.cf1_pose = pose
 
-    def navgoal_call(self, goal, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.05, duration=0):
+    def navgoal_call(self, goal, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.05, duration=0, emergency=False):
     #def navgoal_call(self, goal, pos_thres, yaw_thres, vel_thres, vel_yaw_thres, duration):
         rospy.wait_for_service('cf1/navgoal/move_to')
         try:
@@ -54,27 +55,35 @@ class NavigationServer:
             req.vel_thres = vel_thres
             req.vel_yaw_thres = vel_yaw_thres
             req.duration = duration
-            resp = self.navgoal_client(goal=goal,
-                                       pos_thres=pos_thres,
-                                       yaw_thres=yaw_thres,
-                                       vel_thres=vel_thres,
-                                       vel_yaw_thres=vel_yaw_thres,
-                                       duration=float(duration))
-            #resp = self.navgoal_client(req)
-            return resp.at_goal
+            if not emergency:
+                resp = self.navgoal_client(goal=goal,
+                                           pos_thres=pos_thres,
+                                           yaw_thres=yaw_thres,
+                                           vel_thres=vel_thres,
+                                           vel_yaw_thres=vel_yaw_thres,
+                                           duration=float(duration))
+            else:
+                resp = self.navgoal_emergency_client(goal=goal,
+                                                     pos_thres=pos_thres,
+                                                     yaw_thres=yaw_thres,
+                                                     vel_thres=vel_thres,
+                                                     vel_yaw_thres=vel_yaw_thres,
+                                                     duration=float(duration))
+            return resp.at_goal.data
         except rospy.ServiceException as e:
             print("Service call failed: {}".format(e))
+            return False
 
     def plan_and_follow_path_callback(self, req):
         # TODO: change to just follow path
         start_pos = self.cf1_pose
         if not self.tf_buf.can_transform("cf1/odom", 'map', rospy.Time(0)):
             rospy.logwarn_throttle(5.0, 'No transform from cf1/odom to map')
-            return
+            return PlanAndFollowPathResponse(Bool(False))
         start_pos = self.tf_buf.transform(start_pos, "map", rospy.Duration(1.0))
         if not start_pos:
             print("Need a cf1/pose...")
-            return False
+            return PlanAndFollowPathResponse(Bool(False))
         end_pos = self.get_marker_goal(req.marker_id)
         marker_pos = self.get_marker_pose(req.marker_id)
         rospy.wait_for_service('cf1/navgoal/move_to')
@@ -82,7 +91,7 @@ class NavigationServer:
         resp = self.plath_plan_client(start_pos, end_pos)
         if not len(resp.path.poses):
             print("No path found!")
-            return
+            return PlanAndFollowPathResponse(Bool(False))
 
         print("Going")
         poses = list(reversed(resp.path.poses))
@@ -97,15 +106,14 @@ class NavigationServer:
              # TODO: currently ignoring if not reached position, change that
             self.navgoal_call(p_next, pos_thres=0.05, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
         print("End goal")
-        resp = self.navgoal_call(end_pos, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
+        at_goal = self.navgoal_call(end_pos, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
         print("Done")
-        return resp
-
+        return PlanAndFollowPathResponse(Bool(at_goal))
 
     def move_to_callback(self, req):
         # Convenience method to be able to pusblish navgoal via the topic cf1/move_to without using the service
         resp = self.navgoal_call(req, pos_thres=0.2, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=0.1)
-        print("Moving: {}".format(resp.data))
+        print("Moving: {}".format(resp))
         return resp
 
     def takeoff_callback(self, _):
@@ -115,8 +123,8 @@ class NavigationServer:
             goal.pose.position.z = 0.5
             goal.pose.orientation.w = 1 # this keeps the orientation unchanged!
             resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.1, duration=5)
-            print("Takeoff: {}".format(resp.data))
-            return resp
+            print("Takeoff: {}".format(resp))
+            return TakeOffResponse(Bool(resp))
         else:
             print("FU!")
             return TakeOffResponse(Bool(False))
@@ -132,15 +140,33 @@ class NavigationServer:
             #goal.pose.position.z = -10
             #resp = self.navgoal_call(goal, pos_thres=100, yaw_thres=5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)
 
-            print("Landing: {}".format(resp.data))
-            return resp
+            print("Landing: {}".format(resp))
+            return LandResponse(Bool(resp))
         else:
             print("Are you serious!?")
             return LandResponse(Bool(False))
 
+    def emergency_landing(self, _):
+        if self.cf1_pose is None or abs(self.cf1_pose.pose.position.z) > 0.1:
+            goal = PoseStamped()
+            goal.header.frame_id = "cf1/base_link"
+            goal.pose.position.z = -(self.cf1_pose.pose.position.z)
+            goal.pose.orientation.w = 1
+            resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)
+            self.stop_pub.publish()
+            #goal.pose.position.z = -10
+            #resp = self.navgoal_call(goal, pos_thres=100, yaw_thres=5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)
+
+            print("Landing: {}".format(resp))
+            return EmergencyLandResponse(Bool(resp))
+        else:
+            print("Are you serious!?")
+            return EmergencyLandResponse(Bool(False))
+
     def spin_motion_callback(self, _):
         # Obviously spins the drone XD
-        angle_inc = 2*np.pi/3
+        n = 10
+        angle_inc = 2*np.pi/float(n)
         goal = PoseStamped()
         goal.header.frame_id = "cf1/base_link"
         (goal.pose.orientation.x,
@@ -150,23 +176,21 @@ class NavigationServer:
 
          # in case of crazy drift during spin, we define final pose in
          # map so that it returns to original pose (shouldnt be necessary irl)
-        while not rospy.is_shutdown():
-            try: final_pose = self.tf_buf.transform(self.cf1_pose, 'map')
-            except: print("Can't transform cf1/pose to map yet...")
-            else: break
+        try: final_pose = self.tf_buf.transform(self.cf1_pose, 'map',rospy.Duration(1))
+        except: print("Can't transform cf1/pose to map yet...")
 
         # spin 2 thirds
         print("Spinning...")
-        r1 = self.navgoal_call(goal, pos_thres=0.5, yaw_thres=0.5, vel_thres=1, vel_yaw_thres=100, duration=3.0)
-        print("Spin 1/3: {}".format(r1.data))
-        r2 = self.navgoal_call(goal, pos_thres=0.5, yaw_thres=0.5, vel_thres=1, vel_yaw_thres=100, duration=2.0)
-        print("Spin 2/3: {}".format(r2.data))
+        for i in range(n-1):
+            r = self.navgoal_call(goal, pos_thres=0.1, yaw_thres=0.05, vel_thres=1, vel_yaw_thres=100, duration=3.0)
+            print("Spin {}/{}: {}".format(i+1, n, r))
         # final goal
         # it might take a long time (over 20 sec) for the drone to reach the final orientation in simulation. Could be that its spinning really fast...
-        r3 = self.navgoal_call(final_pose, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.1, duration=3.0)
-        print("Spin 3/3: {}".format(r3.data))
+        rospy.sleep(3)
+        r = self.navgoal_call(final_pose, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.1, duration=3.0)
+        print("Spin {}/{}: {}".format(n, n, r))
         #print("Spin goal: {}".format(final_pose))
-        return r3
+        return SpinResponse(Bool(r))
 
     def marker_goal_callback(self, req):
 
@@ -219,12 +243,13 @@ class NavigationServer:
         """
 
         resp = self.navgoal_call(goal_map)
-        print("Moved to marker {}: {}".format(req.marker_id, resp.data))
-        return resp
+        print("Moved to marker {}: {}".format(req.marker_id, resp))
+        return MoveToMarkerResponse(Bool(resp))
 
 
-    def get_marker_goal(self, marker_id):
+    def get_marker_goal(self, req):
         # TODO: make useful for signs as well
+        marker_id = req.marker_id
         if marker_id == 16:
             object_frame = "sign/" + 'dangerous_curve_left'
         elif marker_id == 17:
@@ -264,7 +289,8 @@ class NavigationServer:
         goal_map.pose.orientation.w = q[3]
         return goal_map
 
-    def get_marker_pose(self, marker_id):
+    def get_marker_pose(self, req):
+        marker_id = req.marker_id
         # TODO: make useful for signs as well
         if marker_id == 16:
             object_frame = "sign/" + 'dangerous_curve_left'

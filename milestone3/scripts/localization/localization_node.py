@@ -251,7 +251,7 @@ class MapOdomUpdate:
         Qs = []
         for marker in m_array.markers:
             # TODO: make this general (no hardcoded Qs)
-            Q = np.diag([0.3, 0.3, 0.3, 0.1, 0.1, 0.01])
+            Q = np.diag([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
 
             measured_pose = self.get_measured_pose_filtered(believed_pose, marker)
             measured_state = self.pose_stamped_to_state(measured_pose)
@@ -318,10 +318,12 @@ class MapOdomUpdate:
 
         for marker in m_array.markers:
             # TODO: make this general (no hardcoded Qs)
-            Q = np.diag([0.3, 0.3, 0.3, 0.1, 0.1, 0.01])
+            Q = np.diag([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
 
             measurement_fb = Int32MultiArray()
             measured_pose = self.get_measured_pose_filtered(believed_pose, marker)
+            if not measured_pose:
+                continue
             measured_state = self.pose_stamped_to_state(measured_pose)
 
             valid, K, filtered_state = self.kf.handle_measurement(believed_state, measured_state, Q)
@@ -363,6 +365,8 @@ class MapOdomUpdate:
         self.tf_buf.set_transform(t, "gandalfs_authority")
         #self.broadcaster.sendTransform(t) # for vizualization
         measured_orientation = self.get_map_to_map_detected_rotation(frame_marker, frame_detected, time_stamp)
+        if not measured_orientation:
+            return
 
         # Disregard rotational diplacement of marker detection
         ax, ay, az = euler_from_quaternion([measured_orientation.x,
@@ -435,8 +439,11 @@ class MapOdomUpdate:
         return t
 
     def get_map_to_map_detected_rotation(self, frame_marker, frame_detected, time_stamp):
-        # can this fail?
-        map_to_marker = self.tf_buf.lookup_transform_core(frame_marker, "map", time_stamp)
+        # This fails when an aruco marker that doesn't exist is detected
+        try:
+            map_to_marker = self.tf_buf.lookup_transform_core(frame_marker, "map", time_stamp)
+        except:
+            return None
         marker_to_detected = self.tf_buf.lookup_transform_core(frame_marker, frame_detected, time_stamp)
 
         map_to_marker_rot = [map_to_marker.transform.rotation.x,
