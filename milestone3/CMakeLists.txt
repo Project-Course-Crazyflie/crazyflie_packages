@@ -62,6 +62,8 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 ## Generate services in the 'srv' folder
  add_service_files(
    FILES
+   EmergencyLand.srv
+   EmergencyMoveTo.srv
    MoveTo.srv
    PlanPath.srv
    FollowPath.srv

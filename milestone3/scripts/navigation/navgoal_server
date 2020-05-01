@@ -24,7 +24,7 @@ class NavGoalPublisher:
         self.cf1_vel = None
 
         rospy.Service("cf1/navgoal/move_to", MoveTo, self.goal_callback)
-        rospy.Service("cf1/navgoal/move_to_emergency", MoveTo, self.emergency_goal_callback)
+        rospy.Service("cf1/navgoal/move_to_emergency", EmergencyMoveTo, self.emergency_goal_callback)
         rospy.Subscriber("cf1/navgoal/stop", Empty, self.cmd_stop_callback)
         rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
         rospy.Subscriber("cf1/velocity", TwistStamped, self.cf1_vel_callback)

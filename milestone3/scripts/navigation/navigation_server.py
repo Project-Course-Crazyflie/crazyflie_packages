@@ -14,10 +14,12 @@ from std_msgs.msg import String, Empty, Int8, Bool
 from crazyflie_driver.msg import Position
 
 from milestone3.srv import MoveTo, MoveToRequest
+from milestone3.srv import EmergencyMoveTo, EmergencyMoveToResponse, EmergencyMoveToRequest
 from milestone3.srv import PlanPath, PlanPathResponse
 from milestone3.srv import PlanAndFollowPath, PlanAndFollowPathResponse
 from milestone3.srv import Spin, SpinResponse
 from milestone3.srv import Land, LandResponse
+from milestone3.srv import EmergencyLand, EmergencyLandResponse
 from milestone3.srv import TakeOff, TakeOffResponse
 from milestone3.srv import MoveToMarker, MoveToMarkerResponse
 
@@ -37,15 +39,15 @@ class NavigationServer:
         rospy.Service('cf1/navigation/plan_and_follow_path', PlanAndFollowPath, self.plan_and_follow_path_callback)
         rospy.Service("cf1/navigation/takeoff", TakeOff, self.takeoff_callback)
         rospy.Service("cf1/navigation/land", Land, self.land_callback)
+        rospy.Service("cf1/navigation/emergency_land", EmergencyLand, self.emergency_land_callback)
         rospy.Service("cf1/navigation/spin", Spin, self.spin_motion_callback)
-        rospy.Service("cf1/navigation/move_to_marker", MoveToMarker, self.marker_goal_callback)
 
     def cf1_pose_callback(self, pose):
         self.cf1_pose = pose
 
     def navgoal_call(self, goal, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.05, duration=0, emergency=False):
     #def navgoal_call(self, goal, pos_thres, yaw_thres, vel_thres, vel_yaw_thres, duration):
-        rospy.wait_for_service('cf1/navgoal/move_to')
+        #rospy.wait_for_service('cf1/navgoal/move_to')
         try:
             #navgoal_client = rospy.ServiceProxy('cf1/move_to_service', MoveTo)
             req = MoveToRequest()
@@ -69,6 +71,8 @@ class NavigationServer:
                                                      vel_thres=vel_thres,
                                                      vel_yaw_thres=vel_yaw_thres,
                                                      duration=float(duration))
+
+            print(resp)
             return resp.at_goal.data
         except rospy.ServiceException as e:
             print("Service call failed: {}".format(e))
@@ -77,10 +81,12 @@ class NavigationServer:
     def plan_and_follow_path_callback(self, req):
         # TODO: change to just follow path
         start_pos = self.cf1_pose
+        start_pos.header.stamp = rospy.Time(0)
         if not self.tf_buf.can_transform("cf1/odom", 'map', rospy.Time(0)):
             rospy.logwarn_throttle(5.0, 'No transform from cf1/odom to map')
             return PlanAndFollowPathResponse(Bool(False))
         start_pos = self.tf_buf.transform(start_pos, "map", rospy.Duration(1.0))
+        #start_trans = self.tf_buf.look(start_pos, "map", rospy.Duration(1.0))
         if not start_pos:
             print("Need a cf1/pose...")
             return PlanAndFollowPathResponse(Bool(False))
@@ -146,19 +152,21 @@ class NavigationServer:
             print("Are you serious!?")
             return LandResponse(Bool(False))
 
-    def emergency_landing(self, _):
+    def emergency_land_callback(self, _):
         if self.cf1_pose is None or abs(self.cf1_pose.pose.position.z) > 0.1:
             goal = PoseStamped()
             goal.header.frame_id = "cf1/base_link"
             goal.pose.position.z = -(self.cf1_pose.pose.position.z)
             goal.pose.orientation.w = 1
-            resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)
+            resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5, emergency=True)
             self.stop_pub.publish()
             #goal.pose.position.z = -10
             #resp = self.navgoal_call(goal, pos_thres=100, yaw_thres=5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)
 
             print("Landing: {}".format(resp))
-            return EmergencyLandResponse(Bool(resp))
+            resp = EmergencyLandResponse(Bool(resp))
+            print(resp)
+            return resp
         else:
             print("Are you serious!?")
             return EmergencyLandResponse(Bool(False))
@@ -247,9 +255,8 @@ class NavigationServer:
         return MoveToMarkerResponse(Bool(resp))
 
 
-    def get_marker_goal(self, req):
+    def get_marker_goal(self, marker_id):
         # TODO: make useful for signs as well
-        marker_id = req.marker_id
         if marker_id == 16:
             object_frame = "sign/" + 'dangerous_curve_left'
         elif marker_id == 17:
@@ -289,8 +296,7 @@ class NavigationServer:
         goal_map.pose.orientation.w = q[3]
         return goal_map
 
-    def get_marker_pose(self, req):
-        marker_id = req.marker_id
+    def get_marker_pose(self, marker_id):
         # TODO: make useful for signs as well
         if marker_id == 16:
             object_frame = "sign/" + 'dangerous_curve_left'

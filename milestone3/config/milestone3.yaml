@@ -8,7 +8,7 @@ navigation:
 localization:
     process_noise: [0.003, 0.003, 0.003, 0.003, 0.003, 0.003]  # used in v5
     initial_cov: [100000, 100000, 100000, 100000, 100000, 100000] # used in v5
-    maha_dist_thres: 10
+    maha_dist_thres: 1
     cov_norm_thres: 0.02
     measurement_config: [true, true, true,   # translation x,y,z
                          false, false, true] # rotation roll,pitch,yaw
