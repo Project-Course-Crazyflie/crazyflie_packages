@@ -280,8 +280,8 @@ class RRT:
 		if not node.parent: #assuming that the current pose is safe
 			return True
 
-		v = np.array([node.x - node.parent.x,node.y - node.parent.y,node.z - node.parent.z])
-		p0 = np.array([node.x, node.y, node.z])
+		v_line = np.array([node.x - node.parent.x,node.y - node.parent.y,node.z - node.parent.z])
+		p0 = np.array([node.parent.x, node.parent.y, node.parent.z])
 		for o in obstacles:
 			start = o[0]
 			stop = o[1]
@@ -290,25 +290,31 @@ class RRT:
 
 			u = start - corner
 			v = stop - corner
-			#print(u, v)
+
 			normal = np.cross(u,v)
+			normal /= np.linalg.norm(normal)
 			for i in range(-1,2,2):
 				start1 = start + i*self.inflation*normal
 				stop1 = stop + i*self.inflation*normal
 
 				#t = -(normal[0]*(p0[0]-x0) +normal[1]*(p0[1]-y0) + normal[2]*(p0[2] -z0))/(Nx*v[0]+ Ny*v[1] +Nz*v[3]) + Nx(p0[0]-x0) +Ny(p0[1]-y0)
-				direction = np.dot(normal,v)
+				direction = np.dot(normal,v_line)
+				#print("direction", str(direction))
 				if direction == 0:
 					continue
 				t = -np.dot(normal,p0-start1)/direction
 				if t <= 1 and t >= 0:
-					intersec = p0 + t*v
-					if intersec[0] < np.max(start1[0],stop1[0]) and intersec[0] > np.min(start1[0],stop1[0]) and \
-						intersec[1] < np.max(start1[1],stop1[1]) and intersec[1] > np.min(start1[1],stop1[1]) and \
-						intersec[2] < np.max(start1[2],stop1[2]) and intersec[2] > np.min(start1[2],stop1[2]):
+					intersec = p0 + t*v_line
+					#print("t", str(t))
+					print("intersec", str(intersec))
+					print("x" ,np.max([start1[0],stop1[0]]), np.min([start1[0],stop1[0]])) 
+					print("y" ,np.max([start1[1],stop1[1]]), np.min([start1[1],stop1[1]]))
+					print("z" ,np.max([start1[2],stop1[2]]), np.min([start1[2],stop1[2]]))  
+					if intersec[0] <= np.max([start1[0],stop1[0]]) and intersec[0] >= np.min([start1[0],stop1[0]]) and \
+						intersec[1] <= np.max([start1[1],stop1[1]]) and intersec[1] >= np.min([start1[1],stop1[1]]) and \
+						intersec[2] <= np.max([start1[2],stop1[2]]) and intersec[2] >= np.min([start1[2],stop1[2]]):
 						return False
 		return True
-
 			#
 
 			#if intersec[0] < np.max(node.x,node.parent.x) and intersec[0] > np.min(node.x,node.parent.x) and \
