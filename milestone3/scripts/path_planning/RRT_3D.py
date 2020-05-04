@@ -64,7 +64,7 @@ class RRT:
 			self.parent = None
 
 	def __init__(self, start_point, goal_point, obstacles, sample_rate, \
-				 rho=0.25, path_resolution=0.1):
+				 rho=0.5, path_resolution=0.1):
 
 		self.start_node = self.RRTnode(start_point[0], start_point[1], start_point[2])
 		self.goal_node = self.RRTnode(goal_point[0], goal_point[1], goal_point[2])
@@ -78,6 +78,7 @@ class RRT:
 		self.path_resolution = path_resolution
 		self. sample_rate = sample_rate
 		self.node_list = []
+		self.inflation = path_resolution
 
 	def rrt_planning(self, animation=True):
 		self.node_list = [self.start_node]
@@ -239,25 +240,41 @@ class RRT:
 			v = stop - corner
 
 			normal = np.cross(u,v)
+			normal /= np.linalg.norm(normal)
+			#print(normal)
 
-			d = -corner.dot(normal)
+			d = -corner.dot(normal) 
 			
 			if normal[0] == 0.0:
-				xx, zz = np.meshgrid(np.linspace(start[0], stop[0], 2) , np.linspace(start[2], stop[2], 2))
+				xx, zz = np.meshgrid(np.linspace(start[0], stop[0], 3) , np.linspace(start[2], stop[2], 3))
 				yy = (-normal[0]*xx - normal[2]*zz - d)*1./normal[1]
 
 				fig.plot_surface(xx, yy, zz)
 			elif normal[1] == 0.0:
-				yy, zz = np.meshgrid(np.linspace(start[1], stop[1], 2) , np.linspace(start[2], stop[2], 2))
+				yy, zz = np.meshgrid(np.linspace(start[1], stop[1], 3) , np.linspace(start[2], stop[2], 3))
 				xx = (-normal[1]*yy - normal[2]*zz - d)*1./normal[0]
+
+				fig.plot_surface(xx, yy, zz)
+			elif normal[2] == 0.0:
+				#print(o)
+				xx, zz = np.meshgrid(np.linspace(start[0], stop[0], 3) , np.linspace(start[2], stop[2], 3))
+				yy = (-normal[0]*xx - normal[2]*zz - d)*1./normal[1]
+
+				#print(xx, yy, zz)
 
 				fig.plot_surface(xx, yy, zz)
 
 		fig.scatter(self.start_node.x, self.start_node.y, self.start_node.z, "xr")
 		fig.scatter(self.goal_node.x, self.goal_node.y, self.goal_node.z, "xr")
-		fig.set_xlim3d(self.min_rand_area[0], self.max_rand_area[0])
-		fig.set_ylim3d(self.min_rand_area[1], self.max_rand_area[1])
-		fig.set_zlim3d(self.min_rand_area[2], self.max_rand_area[2])
+		fig.set_xlim3d(-5, 5)
+		fig.set_ylim3d(-5, 5)
+		fig.set_zlim3d(0, 3)
+		fig.set_xlabel('x')
+		fig.set_ylabel('y')
+		fig.set_zlabel('z')
+		#fig.set_xlim3d(self.min_rand_area[0], self.max_rand_area[0])
+		#fig.set_ylim3d(self.min_rand_area[1], self.max_rand_area[1])
+		#fig.set_zlim3d(self.min_rand_area[2], self.max_rand_area[2])
 		fig.set_aspect("equal")
 		plt.pause(0.01)
 
@@ -304,7 +321,7 @@ class RRT:
 		return True #safe
 
 	@staticmethod
-	def safe(node, obstacles):
+	def safe_linda(node, obstacles):
 		if node == None:
 			return False
 		for o in obstacles:
@@ -331,6 +348,48 @@ class RRT:
 					return False #point in plane, collision
 
 		return True #safe
+
+	def safe(self, node, obstacles):
+		if node == None:
+			return False
+		if not node.parent: #assuming that the current pose is safe
+			return True
+
+		v_line = np.array([node.x - node.parent.x,node.y - node.parent.y,node.z - node.parent.z])
+		p0 = np.array([node.parent.x, node.parent.y, node.parent.z])
+		for o in obstacles:
+			start = o[0]
+			stop = o[1]
+			corner = np.array(stop)
+			corner[2] = start[2]
+
+			u = start - corner
+			v = stop - corner
+
+			normal = np.cross(u,v)
+			normal /= np.linalg.norm(normal)
+			for i in range(-1,2,2):
+				start1 = start + i*self.inflation*normal
+				stop1 = stop + i*self.inflation*normal
+
+				#t = -(normal[0]*(p0[0]-x0) +normal[1]*(p0[1]-y0) + normal[2]*(p0[2] -z0))/(Nx*v[0]+ Ny*v[1] +Nz*v[3]) + Nx(p0[0]-x0) +Ny(p0[1]-y0)
+				direction = np.dot(normal,v_line)
+				#print("direction", str(direction))
+				if direction == 0:
+					continue
+				t = -np.dot(normal,p0-start1)/direction
+				if t <= 1 and t >= 0:
+					intersec = p0 + t*v_line
+					#print("t", str(t))
+					#print("intersec", str(intersec))
+					#print("x" ,np.max([start1[0],stop1[0]]), np.min([start1[0],stop1[0]])) 
+					#print("y" ,np.max([start1[1],stop1[1]]), np.min([start1[1],stop1[1]]))
+					#print("z" ,np.max([start1[2],stop1[2]]), np.min([start1[2],stop1[2]]))  
+					if intersec[0] <= np.max([start1[0],stop1[0]]) and intersec[0] >= np.min([start1[0],stop1[0]]) and \
+						intersec[1] <= np.max([start1[1],stop1[1]]) and intersec[1] >= np.min([start1[1],stop1[1]]) and \
+						intersec[2] <= np.max([start1[2],stop1[2]]) and intersec[2] >= np.min([start1[2],stop1[2]]):
+						return False
+		return True
 
 
 	@staticmethod
@@ -405,7 +464,7 @@ def main(): #argv = sys.argv):
 		#plot_dilated_walls.append(plot_walls_list[i].buffer(0.1))
 	#print(walls)
 
-	rrt = RRT(start_point=[0.7, 3.3, 0.5], goal_point=[2.0, 1.5, 1.1], obstacles=walls, sample_rate=5)
+	rrt = RRT(start_point=[0.0, 1.0, 0.5], goal_point=[3.0, 1.0, 0.5], obstacles=walls, sample_rate=5)
 	path = rrt.rrt_planning(animation)
 	print(path)
 
@@ -413,6 +472,9 @@ def main(): #argv = sys.argv):
 		print('Cannot find path')
 	else:
 		print('Found path')
+
+	path.append([0.0, 1.0, 0.5])
+
 
 	# Draw final path
 	if animation:
