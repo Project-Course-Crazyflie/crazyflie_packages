@@ -516,7 +516,7 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
     # NMS methods https://github.com/ultralytics/yolov3/issues/679 'or', 'and', 'merge', 'vision', 'vision_batch'
 
     # Box constraints
-    min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
+    min_wh, max_wh = 2, 480  # (pixels) minimum and maximum box width and height
 
     method = 'vision_batch'
     batched = 'batch' in method  # run once per image, all classes simultaneously

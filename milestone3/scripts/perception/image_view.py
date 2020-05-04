@@ -6,6 +6,7 @@ import roslib
 import rospy
 from sensor_msgs.msg import Image
 import os.path
+import sys
 import glob
 
 
@@ -28,15 +29,18 @@ rospy.init_node('traning_data')
 def main():
     global image_msg
     rate = rospy.Rate(10) #Hz
-    files = glob.glob("/home/robot/Traning_set/*.png")
+    files = glob.glob("./*.png")
     files.sort()
     nb = 0      #nb of images saved
     i = 0       #where to start the image names
-    
+    if len(sys.argv) > 1:
+        i = sys.argv[1]
+
     if len(files) != 0 :
         string = files[-1].split('/')[-1]
         i = (int(string[5:-4]))+1
-    
+        print('starting image count at: {}'.format(i))
+
 
 
     while not rospy.is_shutdown():
@@ -57,7 +61,7 @@ def main():
             n = '0' * n_0
 
             filename = 'image' + n + str(i) + '.png'
-            path = os.path.join(os.path.expanduser('~'),'Traning_set',filename)
+            path = './'+filename#path = os.path.join(os.path.expanduser('~'),'Traning_set',filename)
             i += 1
             if not cv2.imwrite(path, img):
                 raise Exception("Could not write image")

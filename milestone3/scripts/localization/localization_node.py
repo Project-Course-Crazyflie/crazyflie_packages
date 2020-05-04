@@ -251,7 +251,7 @@ class MapOdomUpdate:
         Qs = []
         for marker in m_array.markers:
             # TODO: make this general (no hardcoded Qs)
-            Q = np.diag([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
+            Q = np.diag(rospy.get_param("perception/aruco_cov"))
 
             measured_pose = self.get_measured_pose_filtered(believed_pose, marker)
             measured_state = self.pose_stamped_to_state(measured_pose)
@@ -318,7 +318,7 @@ class MapOdomUpdate:
 
         for marker in m_array.markers:
             # TODO: make this general (no hardcoded Qs)
-            Q = np.diag([0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
+            Q = np.diag(rospy.get_param("perception/aruco_cov"))
 
             measurement_fb = Int32MultiArray()
             measured_pose = self.get_measured_pose_filtered(believed_pose, marker)

@@ -59,7 +59,7 @@ class StateMachine:
         self.cf1_pose = None
 
         self.checked_markers = []
-        self.unchecked_markers = [1, 18]
+        self.unchecked_markers = [1,5,3] # hardcoding for world hunger
         self.current_state = None
         self.abort = False
         self.is_localizing = False

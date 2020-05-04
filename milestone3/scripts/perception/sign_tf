@@ -64,6 +64,8 @@ H, W = rospy.get_param("perception/img_size")[0]  #480,640 or 446, 332 for undis
 
 
 def main():
+	Z = 1
+	gain = 0.0
 	global boxes_msg
 	rate = rospy.Rate(10) #Hz
 	while not rospy.is_shutdown():
@@ -82,7 +84,11 @@ def main():
 				p.header.stamp.nsecs = boxes.data[n*i+6]
 
 				#find the depth of found object(s)
-				Z = fy*real_size/(boxes.data[n*i+3])
+				z = fy*real_size/(boxes.data[n*i+3])
+				z -= gain * (Z-z)
+				Z=z
+
+				#rospy.loginfo('boxz: {} ,{}'.format(Z,boxes.data[n*i+3:n*i+5]))
 				p.pose.position.z = Z
 				p.pose.position.x = (boxes.data[n*i]-W/2)*Z/fx
 				p.pose.position.y = (boxes.data[n*i+1]-H/2)*Z/fy
@@ -150,7 +156,7 @@ def main():
 				#p = tf_buf.transform(p, 'map')
 
 				t = TransformStamped()
-				t.header.stamp = p.header.stamp
+				t.header.stamp = rospy.Time.now()#p.header.stamp
 				t.header.frame_id = 'cf1/camera_link'
 				t.child_frame_id = 'sign_dectected/' + labels[boxes.data[n*i+2]]
 				t.transform.translation = p.pose.position

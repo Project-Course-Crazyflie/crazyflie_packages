@@ -158,7 +158,7 @@ class NavigationServer:
             goal.header.frame_id = "cf1/base_link"
             goal.pose.position.z = -(self.cf1_pose.pose.position.z)
             goal.pose.orientation.w = 1
-            resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5, emergency=True)
+            resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.5, vel_thres=0.01, vel_yaw_thres=0.01, duration=2, emergency=True)
             self.stop_pub.publish()
             #goal.pose.position.z = -10
             #resp = self.navgoal_call(goal, pos_thres=100, yaw_thres=5, vel_thres=0.01, vel_yaw_thres=0.01, duration=5)

@@ -277,6 +277,70 @@ class RRT:
 	def safe(self, node, obstacles):
 		if node == None:
 			return False
+		if not node.parent: #assuming that the current pose is safe
+			return True
+
+		v = np.array([node.x - node.parent.x,node.y - node.parent.y,node.z - node.parent.z])
+		p0 = np.array([node.x, node.y, node.z])
+		for o in obstacles:
+			start = o[0]
+			stop = o[1]
+			corner = np.array(stop)
+			corner[2] = start[2]
+
+			u = start - corner
+			v = stop - corner
+			#print(u, v)
+			normal = np.cross(u,v)
+			for i in range(-1,2,2):
+				start1 = start + i*self.inflation*normal
+				stop1 = stop + i*self.inflation*normal
+
+				#t = -(normal[0]*(p0[0]-x0) +normal[1]*(p0[1]-y0) + normal[2]*(p0[2] -z0))/(Nx*v[0]+ Ny*v[1] +Nz*v[3]) + Nx(p0[0]-x0) +Ny(p0[1]-y0)
+				direction = np.dot(normal,v)
+				if direction == 0:
+					continue
+				t = -np.dot(normal,p0-start1)/direction
+				if t <= 1 and t >= 0:
+					intersec = p0 + t*v
+					if intersec[0] < np.max(start1[0],stop1[0]) and intersec[0] > np.min(start1[0],stop1[0]) and \
+						intersec[1] < np.max(start1[1],stop1[1]) and intersec[1] > np.min(start1[1],stop1[1]) and \
+						intersec[2] < np.max(start1[2],stop1[2]) and intersec[2] > np.min(start1[2],stop1[2]):
+						return False
+		return True
+
+			#
+
+			#if intersec[0] < np.max(node.x,node.parent.x) and intersec[0] > np.min(node.x,node.parent.x) and \
+			#	intersec[1] < np.max(node.y,node.parent.y) and intersec[1] > np.min(node.y,node.parent.y) and \
+			#	intersec[2] < np.max(node.z,node.parent.z) and intersec[2] > np.min(node.z,node.parent.z)
+
+
+		#convert node to vector
+
+
+		'''
+		x = p0[0] + v[0]*t
+		y = p0[1] + v[1]*t
+		z = p0[2] + v[2]*t
+
+		Nx(x-x0) + Ny(y-y0) + Nz(z-z0) =0
+
+		Nx( p0[0] + v[0]*t-x0) + Ny(p0[1] + v[1]*t-y0) + Nz(p0[2] + v[2]*t-z0) =0
+
+		t*(Nx*v[0]+ Ny*v[1] +Nz*v[3]) + Nx(p0[0]-x0) +Ny(p0[1]-y0) + Nz(p0[2] -z0)=0
+
+		t=...
+
+		x = p0[0] + v[0]*t
+		y = p0[1] + v[1]*t
+		z = p0[2] + v[2]*t  --> find the point coordinates
+
+		'''
+
+	def safe_linda(self, node, obstacles):
+		if node == None:
+			return False
 		for o in obstacles:
 			start = o[0]
 			stop = o[1]
@@ -292,7 +356,13 @@ class RRT:
 
 			for xx, yy, zz in zip(node.x_path, node.y_path, node.z_path):
 				point = np.array([xx, yy, zz])
+				'''
+				ax +by + cz +d =0
+				ex + fy + g = 0
 
+				ax + by + cz + d = ex + fy + g
+				(a-e)*x + (b-f)*y + cz +(d-g) = 0
+				'''
 				check_plane = np.dot(point, normal) + d
 
 				point_plane_distance = abs((np.dot(normal, point) + d)/math.sqrt(normal[0]**2 + normal[1]**2 + normal[2]**2))

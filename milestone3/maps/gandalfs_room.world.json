@@ -17,7 +17,7 @@
 
   "roadsigns": [
     {"sign": "no_bicycle", "pose": {"position": [0.64, 4, 0.43], "orientation": [0, -90, 180]}},
-    {"sign": "dangerous_curve_left", "pose": {"position": [1, 1, 0.43], "orientation": [0, -90, 180]}},
+    {"sign": "dangerous_curve_left", "pose": {"position": [2.04, 3.32, 0.79], "orientation": [0, -90, 90]}},
     {"sign": "warning_roundabout", "pose": {"position": [2.04, 0.4, 0.64], "orientation": [0, -90, 180]}}
   ],
 

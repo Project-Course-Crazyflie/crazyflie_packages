@@ -9,12 +9,12 @@
         <param name="mtx" value="$(find milestone3)/scripts/perception/mtx.npy"/>
         <param name="dist" value="$(find milestone3)/scripts/perception/dist.npy"/>
     </node>
-    <node pkg="milestone3" type="deep_learning2.py" name="deep_learning">
+    <!--node pkg="milestone3" type="deep_learning2.py" name="deep_learning">
         <param name="names" value="$(arg names_file)"/>
         <param name="cfg" value="$(arg cfg_file)"/>
         <param name="weights" value="$(arg weights_file)"/>
         <param name="view_img" value="True"/>
-    </node>
+    </node-->
 
     <!--node pkg="milestone3" type="navi" name="navi">
         <param name="labels" value="$(arg labels_file)"/>

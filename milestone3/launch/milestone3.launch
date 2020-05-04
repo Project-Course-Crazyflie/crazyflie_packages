@@ -2,7 +2,6 @@
 
 
     <arg name="world_name"/> <!--default="simple_map"/>-->
-    <arg name="labels" default="$(find milestone2)/perception/coco.names"/>
     <arg name="initial_map_to_odom" default="-0.5 -0.5 0 0 0 0"/>
 
     <rosparam file="$(find milestone3)/config/milestone3.yaml" />
@@ -22,14 +21,10 @@
     <node pkg="milestone3" type="aruco_detection" name="aruco_detection">
     </node>
     <node pkg="milestone3" type="displaymap.py" name="map_markers">
-        <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
+        <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
     </node>
-    <!--<node pkg="milestone2" type="find_object_and_check_it" name="find_n_check">
-        <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
-        <param name="labels" value="$(find milestone2)/scripts/$(arg labels)"/>
-    </node>-->
-    <node pkg="milestone3" type="RRT_ROS.py" name="path_planner">
-        <param name="world_name" value="$(find dd2419_resources)/worlds_json/$(arg world_name).world.json"/>
+    <node pkg="milestone3" type="RRT_ROS_3D.py" name="path_planner">
+        <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
     </node>
 
 </launch>

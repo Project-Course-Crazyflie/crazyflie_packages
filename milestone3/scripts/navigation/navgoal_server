@@ -19,6 +19,7 @@ class NavGoalPublisher:
         #                         are effectively only transformed once
         self.transform_once_frames = transform_once_frames
         self.goal = None
+        self.stop = False
         self.emergency_goal = None
         self.cf1_pose = None
         self.cf1_vel = None
@@ -50,7 +51,8 @@ class NavGoalPublisher:
         self.cf1_vel = msg
 
     def cmd_stop_callback(self, _):
-        self.goal = None
+        self.stop = True
+        #self.goal = None
 
     def at_goal(self, goal_odom):
         if not self.cf1_pose:
@@ -61,6 +63,7 @@ class NavGoalPublisher:
         if not goal_odom:
             rospy.loginfo("No goal is set...")
             return False
+
 
         g = np.array([goal_odom.pose.position.x, goal_odom.pose.position.y, goal_odom.pose.position.z])
         curr = np.array([self.cf1_pose.pose.position.x, self.cf1_pose.pose.position.y, self.cf1_pose.pose.position.z])
@@ -76,8 +79,13 @@ class NavGoalPublisher:
                                         goal_odom.pose.orientation.w])
 
 
-        diff = g-curr
-        err = np.linalg.norm(diff)
+        if not self.emergency_goal:
+            diff = g-curr
+            err = np.linalg.norm(diff)
+        else:
+            # ignore x and y
+            err = abs(g[2]-curr[2])
+
         err_yaw = abs((yaw_goal-yaw_act + np.pi) % (2*np.pi) - np.pi)
         if self.cf1_vel:
             vel = np.sqrt(self.cf1_vel.twist.linear.x**2 + self.cf1_vel.twist.linear.y**2)
@@ -139,6 +147,7 @@ class NavGoalPublisher:
     def emergency_goal_callback(self, req):
         # msg:= goal
         # RViz's "2D Nav Goal" publishes z=0, so add some altitude if needed.
+
         self.is_at_goal = False
         self.pos_thres = req.pos_thres
         self.yaw_thres = req.yaw_thres
@@ -146,6 +155,7 @@ class NavGoalPublisher:
         self.vel_yaw_thres = req.vel_yaw_thres
         self.duration = req.duration
         msg = req.goal
+
 
         if msg.pose.position.z == 0.0 and msg.header.frame_id in ["cf1/odom", "map"]:
             msg.pose.position.z = 0.5
@@ -204,7 +214,9 @@ class NavGoalPublisher:
     def spin(self):
         rate = rospy.Rate(20)
         while not rospy.is_shutdown():
-            if self.emergency_goal:
+            if self.stop:
+                self.pub_cmd_stop.publish()
+            elif self.emergency_goal:
                 self.publish_cmd(self.emergency_goal)
             elif self.goal:
                 self.publish_cmd(self.goal) # send in as arguments so they don't change during call

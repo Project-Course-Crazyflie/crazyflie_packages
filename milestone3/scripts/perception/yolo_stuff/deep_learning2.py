@@ -62,6 +62,7 @@ def main():
 				# Read image
 				try:
 					im0 = bridge.imgmsg_to_cv2(image_msg, 'rgb8')
+					#print('im0:', im0.shape)
 				except CvBridgeError as e:
 					rospy.logwarn(e)
 				stamp = image_msg.header.stamp.secs
@@ -73,6 +74,7 @@ def main():
 					img = letterbox(im0, new_shape=opt.img_size*2)[0]
 				else:
 					img = im0
+				#print('img',img.shape)
 
 				# Convert from BGR to RGB
 				img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
@@ -94,9 +96,13 @@ def main():
 				#
 
 				# Apply NMS
+				#print(pred[0][0])
 				pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+				#remove boxes that overlap, keep only the one with highest conf
+				#make sure that boxes for different classes do not affect each other
 
 				detected = False
+
 				# Process detections
 				for i, det in enumerate(pred):  # detections per image
 
@@ -117,7 +123,7 @@ def main():
 							conf = A[4]
 							cls = A[-1]
 							xyxy = A[:4]
-							print('xyxy: ', xyxy)
+							#print('xyxy: ', xyxy)
 							if any(xyxy[2:] <= 1):
 								if len(det) == 1:
 									detected = False
@@ -128,7 +134,8 @@ def main():
 								im0 = plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
 
 							conf = A[4]
-							(centerX, centerY, width, height) = xyxy
+							tmp = xyxy2xywh(xyxy.unsqueeze(0))
+							(centerX, centerY, width, height) = (tmp[0,0],tmp[0,1],tmp[0,2],tmp[0,3])
 							print('cls: ' + str(cls))
 							cboxes.extend([int(centerX), int(centerY), int(cls), int(height), int(width), stamp, stamp_ns])
 
@@ -161,7 +168,7 @@ class options:
 		self.output = '//////////////////////////////'
 		self.img_size = [640]
 		self.conf_thres = 0.3
-		self.iou_thres = 0.6
+		self.iou_thres = 0.3
 		self.fourcc = 'mp4v'
 		self.half = False
 		self.device = ''
