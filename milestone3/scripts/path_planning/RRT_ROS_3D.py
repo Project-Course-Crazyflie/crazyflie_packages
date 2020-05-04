@@ -395,10 +395,16 @@ class RRT:
 
 			d = -corner.dot(normal)
 
-			yy, zz = np.meshgrid(np.linspace(start[1], stop[1], 3) , np.linspace(start[2], stop[2], 3))
-			xx = (-normal[1]*yy - normal[2]*zz - d)*1./normal[0]
+			if normal[0] == 0.0:
+				xx, zz = np.meshgrid(np.linspace(start[0], stop[0], 2) , np.linspace(start[2], stop[2], 2))
+				yy = (-normal[0]*xx - normal[2]*zz - d)*1./normal[1]
 
-			fig.plot_surface(xx, yy, zz)
+				fig.plot_surface(xx, yy, zz)
+			elif normal[1] == 0.0:
+				yy, zz = np.meshgrid(np.linspace(start[1], stop[1], 2) , np.linspace(start[2], stop[2], 2))
+				xx = (-normal[1]*yy - normal[2]*zz - d)*1./normal[0]
+
+				fig.plot_surface(xx, yy, zz)
 
 		fig.scatter(self.start_node.x, self.start_node.y, self.start_node.z, "xr")
 		fig.scatter(self.goal_node.x, self.goal_node.y, self.goal_node.z, "xr")
