@@ -304,7 +304,7 @@ class RRT:
 		return True #safe
 
 	@staticmethod
-	def safe(node, obstacles):
+	def safe_linda(node, obstacles):
 		if node == None:
 			return False
 		for o in obstacles:
@@ -331,6 +331,42 @@ class RRT:
 					return False #point in plane, collision
 
 		return True #safe
+
+	def safe(self, node, obstacles):
+		if node == None:
+			return False
+		if not node.parent: #assuming that the current pose is safe
+			return True
+
+		v = np.array([node.x - node.parent.x,node.y - node.parent.y,node.z - node.parent.z])
+		p0 = np.array([node.parent.x, node.parent.y, node.parent.z])
+		for o in obstacles:
+			start = o[0]
+			stop = o[1]
+			corner = np.array(stop)
+			corner[2] = start[2]
+
+			u = start - corner
+			v = stop - corner
+			#print(u, v)
+			normal = np.cross(u,v)
+			normal /= np.linalg.norm(normal)
+			for i in range(-1,2,2):
+				start1 = start + i*self.inflation*normal
+				stop1 = stop + i*self.inflation*normal
+
+				#t = -(normal[0]*(p0[0]-x0) +normal[1]*(p0[1]-y0) + normal[2]*(p0[2] -z0))/(Nx*v[0]+ Ny*v[1] +Nz*v[3]) + Nx(p0[0]-x0) +Ny(p0[1]-y0)
+				direction = np.dot(normal,v)
+				if direction == 0:
+					continue
+				t = -np.dot(normal,p0-start1)/direction
+				if t <= 1 and t >= 0:
+					intersec = p0 + t*v
+					if intersec[0] < np.max(start1[0],stop1[0]) and intersec[0] > np.min(start1[0],stop1[0]) and \
+						intersec[1] < np.max(start1[1],stop1[1]) and intersec[1] > np.min(start1[1],stop1[1]) and \
+						intersec[2] < np.max(start1[2],stop1[2]) and intersec[2] > np.min(start1[2],stop1[2]):
+						return False
+		return True
 
 
 	@staticmethod
