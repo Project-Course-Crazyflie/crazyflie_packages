@@ -58,14 +58,15 @@ class NavGoalPublisher:
         if not self.cf1_pose:
             rospy.logwarn_throttle(5.0, "cf1/pose not available. Can't determine if at goal...")
             return False
-        if not self.cf1_vel:
-            rospy.logwarn_throttle(5.0, "cf1/velocity not available. Ignoring velocity thresholds for navgoal...")
+        #if not self.cf1_vel:
+        #    rospy.logwarn_throttle(5.0, "cf1/velocity not available. Ignoring velocity thresholds for navgoal...")
         if not goal_odom:
             rospy.loginfo("No goal is set...")
             return False
 
-
+        #curr_pose = self.tf_buf.transform(self.cf1_pose, goal_odom.header.frame_id, rospy.Duration(0.1))
         g = np.array([goal_odom.pose.position.x, goal_odom.pose.position.y, goal_odom.pose.position.z])
+        #curr = np.array([curr_pose.pose.position.x, curr_pose.pose.position.y, curr_pose.pose.position.z])
         curr = np.array([self.cf1_pose.pose.position.x, self.cf1_pose.pose.position.y, self.cf1_pose.pose.position.z])
 
         _,_,yaw_act = euler_from_quaternion([self.cf1_pose.pose.orientation.x,

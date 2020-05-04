@@ -1,5 +1,5 @@
 navigation:
-    dist_to_marker: 0.7
+    dist_to_marker: 0.2
     pos_thres: 0.2      # not used yet
     yaw_thres: 0.1      # not used yet
     vel_thres: 0.1      # not used yet

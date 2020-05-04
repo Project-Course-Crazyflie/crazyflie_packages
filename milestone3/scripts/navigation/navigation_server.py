@@ -6,10 +6,8 @@ import rospy
 import tf2_ros
 import tf2_msgs
 import tf2_geometry_msgs
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
-from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import PoseArray
-from geometry_msgs.msg import TransformStamped, Vector3
+from tf.transformations import euler_from_quaternion, quaternion_from_euler, quaternion_multiply
+from geometry_msgs.msg import PoseStamped, Quaternion, PoseArray, TransformStamped, Vector3
 from std_msgs.msg import String, Empty, Int8, Bool
 from crazyflie_driver.msg import Position
 
@@ -100,7 +98,7 @@ class NavigationServer:
             return PlanAndFollowPathResponse(Bool(False))
 
         print("Going")
-        poses = list(reversed(resp.path.poses))
+        poses = list(resp.path.poses)
         for p_curr, p_next in zip(poses, poses[1:]):
             # do something with the orientation
             (p_next.pose.orientation.x,
@@ -175,26 +173,29 @@ class NavigationServer:
         # Obviously spins the drone XD
         n = 10
         angle_inc = 2*np.pi/float(n)
-        goal = PoseStamped()
-        goal.header.frame_id = "cf1/base_link"
-        (goal.pose.orientation.x,
-         goal.pose.orientation.y,
-         goal.pose.orientation.z,
-         goal.pose.orientation.w) = quaternion_from_euler(0, 0, angle_inc)
+
+        q_inc = quaternion_from_euler(0, 0, angle_inc)
 
          # in case of crazy drift during spin, we define final pose in
          # map so that it returns to original pose (shouldnt be necessary irl)
         try: final_pose = self.tf_buf.transform(self.cf1_pose, 'map',rospy.Duration(1))
-        except: print("Can't transform cf1/pose to map yet...")
+        except:
+            rospy.logerr("Can't transform cf1/pose to map yet...")
+            return SpinResponse(Bool(False))
 
         # spin 2 thirds
         print("Spinning...")
+        goal = self.cf1_pose
         for i in range(n-1):
-            r = self.navgoal_call(goal, pos_thres=0.1, yaw_thres=0.05, vel_thres=1, vel_yaw_thres=100, duration=3.0)
+            goal.pose.orientation = Quaternion(*quaternion_multiply([goal.pose.orientation.x,
+                                                                    goal.pose.orientation.y,
+                                                                    goal.pose.orientation.z,
+                                                                    goal.pose.orientation.w],
+                                                                    q_inc))
+            r = self.navgoal_call(goal, pos_thres=0.1, yaw_thres=0.1, vel_thres=1, vel_yaw_thres=100, duration=1.0)
             print("Spin {}/{}: {}".format(i+1, n, r))
         # final goal
         # it might take a long time (over 20 sec) for the drone to reach the final orientation in simulation. Could be that its spinning really fast...
-        rospy.sleep(3)
         r = self.navgoal_call(final_pose, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.1, duration=3.0)
         print("Spin {}/{}: {}".format(n, n, r))
         #print("Spin goal: {}".format(final_pose))

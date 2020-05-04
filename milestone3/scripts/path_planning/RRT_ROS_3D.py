@@ -223,11 +223,35 @@ class RRT:
 		node = self.node_list[goal_index]
 
 		while node is not None:
-			path.append([node.x, node.y, node.z])
+			#path.append([node.x, node.y, node.z]) # old version
+			path.append(np.array([node.x, node.y, node.z]))
 			node = node.parent
+		path = list(reversed(path))
+		#return path
+		return path #self.optimize_path(path)
 
-		return path
+	def optimize_path(self, path):
+		# start with first point
+		p_curr = path[0]
+		new_path = [p_curr]
+		while path:
+			# iterate over path reversely and choose the first one that is safe
+			for i, p_next in enumerate(reversed(path)):
+				# is p_curr -> p next
+				n_curr = self.RRTnode(*p_curr)
+				n_next = self.RRTnode(*p_next)
+				n_next.parent = n_curr
+				if self.safe(n_next, self.obstacles):
+					new_path.append(p_next)
+					p_curr = p_next
 
+					# if i == 0 we are done
+					if i == 0:
+						return new_path
+					# change path1
+					path = path[-i:]
+		raise Exception("Shouldn't happen mf!")
+		#return new_path
 
 	def calculate_distance_to_goal(self, x, y, z):
 
@@ -281,7 +305,7 @@ class RRT:
 			return True
 
 		v = np.array([node.x - node.parent.x,node.y - node.parent.y,node.z - node.parent.z])
-		p0 = np.array([node.x, node.y, node.z])
+		p0 = np.array([node.parent.x, node.parent.y, node.parent.z])
 		for o in obstacles:
 			start = o[0]
 			stop = o[1]
@@ -292,6 +316,7 @@ class RRT:
 			v = stop - corner
 			#print(u, v)
 			normal = np.cross(u,v)
+			normal /= np.linalg.norm(normal)
 			for i in range(-1,2,2):
 				start1 = start + i*self.inflation*normal
 				stop1 = stop + i*self.inflation*normal
