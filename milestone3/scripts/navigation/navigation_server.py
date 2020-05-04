@@ -108,7 +108,7 @@ class NavigationServer:
              p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, marker_pos)
             #p_next.pose.orientation = end_pos.pose.orientation # remove
              # TODO: currently ignoring if not reached position, change that
-            self.navgoal_call(p_next, pos_thres=0.05, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
+            self.navgoal_call(p_next, pos_thres=0.1, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
         print("End goal")
         at_goal = self.navgoal_call(end_pos, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
         print("Done")

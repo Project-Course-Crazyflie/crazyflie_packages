@@ -30,7 +30,7 @@ import tf2_ros
 import ast
 from shapely.geometry import LineString, box, Polygon, Point
 
-animation = True
+animation = False
 walls = []
 
 
@@ -60,7 +60,7 @@ def path_callback(req):
 		return PlanPathResponse(Path())
 
 
-	path = rrt.rrt_planning(animation=True)
+	path = rrt.rrt_planning(animation=animation)
 	if animation:
 		rrt.draw_graph()
 		plt.plot([x for (x, y, z) in path], [y for (x, y, z) in path], [z for (x, y, z) in path], '-r')
@@ -109,7 +109,7 @@ class RRT:
 			self.parent = None
 
 	def __init__(self, start_point, goal_point, obstacles, sample_rate, \
-				 rho, inflation, path_resolution=0.1):
+				 rho, inflation, path_resolution=0.5):
 
 		self.start_node = self.RRTnode(start_point[0], start_point[1], start_point[2])
 		self.start_node.x_path = [self.start_node.x]
@@ -157,6 +157,7 @@ class RRT:
 				continue
 			if self.calculate_distance_to_goal(self.node_list[-1].x, self.node_list[-1].y, self.node_list[-1].z) <= self.rho:
 				final_node = self.steer(self.node_list[-1], self.goal_node, self.rho)
+				print('neeeeeeeer')
 				if self.safe(final_node, self.obstacles) == True:
 					is_planning = False
 					return self.generate_final_course(len(self.node_list) - 1)
@@ -181,9 +182,16 @@ class RRT:
 
 	def steer(self, from_node, to_node, expand_rho = float('inf')):
 		new_node = self.RRTnode(from_node.x, from_node.y, from_node.z, from_node.yaw)
-		to_distance, yaw = self.distance_and_angle(new_node, to_node)
+		#to_distance, yaw = self.distance_and_angle(new_node, to_node)
 
+		to_node.x_path = [to_node.x]
+		to_node.y_path = [to_node.y]
+		to_node.z_path = [to_node.z]
+		to_node.yaw_path = [to_node.yaw]
+
+		"""
 		new_node.x_path = [new_node.x]
+
 		new_node.y_path = [new_node.y]
 		new_node.z_path = [new_node.z]
 		new_node.yaw_path = [new_node.yaw]
@@ -193,6 +201,7 @@ class RRT:
 
 		#floor: returns the floor of x as a float. Largest integer leq x
 		node_expand = math.floor(expand_rho/self.path_resolution)
+		print(node_expand)
 
 		for _ in range(int(node_expand)):
 			new_node.x += ((to_node.x - from_node.x)*self.path_resolution)/to_distance
@@ -213,10 +222,9 @@ class RRT:
 			new_node.y_path.append(to_node.y)
 			new_node.z_path.append(to_node.z)
 			new_node.yaw_path.append(to_yaw) #eventually to_node's yaw but that can be tested
-
-		new_node.parent = from_node
-
-		return new_node
+		"""
+		to_node.parent = from_node
+		return to_node
 
 	def generate_final_course(self, goal_index):
 		path = [[self.goal_node.x, self.goal_node.y, self.goal_node.z]]
@@ -227,8 +235,32 @@ class RRT:
 			path.append(np.array([node.x, node.y, node.z]))
 			node = node.parent
 		path = list(reversed(path))
-		#return path
-		return path #self.optimize_path(path)
+		print('optimizing')
+		# makes total sense
+		path = self.pad_path(path)
+		path = self.optimize_path(path)
+		path = self.pad_path(path)
+		path.reverse()
+		path = self.optimize_path(path)
+		path.reverse()
+		path = self.pad_path(path)
+		return path
+
+	def pad_path(self, path):
+		assert len(path) >= 2, "Path should have at least length 2"
+		new_path = []
+		for p, p_next in zip(path[:-1], path[1:]):
+			new_path.append(p)
+			v = p_next-p
+			dist = np.linalg.norm(v)
+			if dist > self.rho:
+				v /= dist
+				n = dist/float(self.rho)
+				for i in range(int(n)):
+					p_new = p + v*self.rho*(i+1)
+					new_path.append(p_new)
+		new_path.append(p_next)
+		return new_path
 
 	def optimize_path(self, path):
 		# start with first point
@@ -250,7 +282,10 @@ class RRT:
 						return new_path
 					# change path1
 					path = path[-i:]
+					break
+		print("OMAAAAAGAAAD")
 		raise Exception("Shouldn't happen mf!")
+
 		#return new_path
 
 	def calculate_distance_to_goal(self, x, y, z):
@@ -330,10 +365,10 @@ class RRT:
 				if t <= 1 and t >= 0:
 					intersec = p0 + t*v_line
 					#print("t", str(t))
-					print("intersec", str(intersec))
-					print("x" ,np.max([start1[0],stop1[0]]), np.min([start1[0],stop1[0]]))
-					print("y" ,np.max([start1[1],stop1[1]]), np.min([start1[1],stop1[1]]))
-					print("z" ,np.max([start1[2],stop1[2]]), np.min([start1[2],stop1[2]]))
+					#print("intersec", str(intersec))
+					#print("x" ,np.max([start1[0],stop1[0]]), np.min([start1[0],stop1[0]]))
+					#print("y" ,np.max([start1[1],stop1[1]]), np.min([start1[1],stop1[1]]))
+					#print("z" ,np.max([start1[2],stop1[2]]), np.min([start1[2],stop1[2]]))
 					if intersec[0] <= np.max([start1[0],stop1[0]]) and intersec[0] >= np.min([start1[0],stop1[0]]) and \
 						intersec[1] <= np.max([start1[1],stop1[1]]) and intersec[1] >= np.min([start1[1],stop1[1]]) and \
 						intersec[2] <= np.max([start1[2],stop1[2]]) and intersec[2] >= np.min([start1[2],stop1[2]]):
