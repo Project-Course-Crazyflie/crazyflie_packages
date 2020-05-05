@@ -352,6 +352,13 @@ class RRT:
 
 			normal = np.cross(u,v)
 			normal /= np.linalg.norm(normal)
+
+			#sideways inflation 
+			normalT = np.cross(normal,np.array([0,0,1]))
+
+			start = start + np.sign(np.dot(normalT,u))* self.inflation*normalT 
+			stop = stop - np.sign(np.dot(normalT,u))*self.inflation*normalT + self.inflation*np.array([0,0,1])
+
 			for i in range(-1,2,2):
 				start1 = start + i*self.inflation*normal
 				stop1 = stop + i*self.inflation*normal
