@@ -1,14 +1,14 @@
 navigation:
-    dist_to_marker: 0.2
+    dist_to_marker: 0.5
     pos_thres: 0.2      # not used yet
     yaw_thres: 0.1      # not used yet
     vel_thres: 0.1      # not used yet
     vel_yaw_thres: 0.05 # not used yet
 
 localization:
-    process_noise: [0.003, 0.003, 0.003, 0.003, 0.003, 0.003]  # used in v5
+    process_noise: [0.001, 0.001, 0.001, 0.001, 0.001, 0.001]  # used in v5
     initial_cov: [100000, 100000, 100000, 100000, 100000, 100000] # used in v5
-    maha_dist_thres: 5
+    maha_dist_thres: 10
     cov_norm_thres: 0.02
     measurement_config: [true, true, true,   # translation x,y,z
                          false, false, true] # rotation roll,pitch,yaw
@@ -17,7 +17,7 @@ localization:
 perception:
     img_size: [[480, 640], [446, 332]]  #H, W
     focal: [221.88078347, 220.72391163]   #Fx, Fy
-    aruco_cov: [0.3, 0.3, 0.3, 0.3, 0.3, 0.3] # used in marker_pose
+    aruco_cov: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5] # used in marker_pose
     sign_cov: [0.1, 0.1, 0.1, -1, -1, -1] # not used in marker_pose
 
 

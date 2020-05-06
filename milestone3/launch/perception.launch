@@ -1,7 +1,7 @@
 <launch>
     <arg name="names_file" default="$(find milestone3)/scripts/perception/yolo_stuff/three_signs.names"/>
     <arg name="cfg_file" default="$(find milestone3)/scripts/perception/yolo_stuff/yolov3-3cls.cfg"/>
-    <arg name="weights_file" default="$(find milestone3)/scripts/perception/yolo_stuff/best.pt"/>
+    <arg name="weights_file" default="$(find milestone3)/scripts/perception/yolo_stuff/best-new-tiny-all.pt"/>
     <arg name="world_name" default="gandalfs_room"/>
     <arg name="view_img" default="True"/>
 

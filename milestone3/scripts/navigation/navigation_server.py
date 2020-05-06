@@ -171,7 +171,7 @@ class NavigationServer:
 
     def spin_motion_callback(self, _):
         # Obviously spins the drone XD
-        n = 10
+        n = 20
         angle_inc = 2*np.pi/float(n)
 
         q_inc = quaternion_from_euler(0, 0, angle_inc)

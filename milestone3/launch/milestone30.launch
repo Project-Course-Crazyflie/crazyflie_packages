@@ -1,0 +1,23 @@
+<launch>
+
+
+    <arg name="world_name"/> <!--default="simple_map"/>-->
+    <arg name="initial_map_to_odom" default="-0.5 -0.5 0 0 0 0"/>
+
+    <rosparam file="$(find milestone3)/config/milestone3.yaml" />
+
+
+
+    <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_cam_trans" args="0.01 0 0.02 -1.57 0 -1.57 cf1/base_link cf1/camera_link">
+    </node>
+
+    <node pkg="milestone3" type="localization_node.py" name="localization_node">
+        <param name="initial_map_to_odom" value="$(arg initial_map_to_odom)"/>
+    </node>
+
+
+    <node pkg="milestone3" type="displaymap.py" name="map_markers">
+        <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
+    </node>
+
+</launch>
