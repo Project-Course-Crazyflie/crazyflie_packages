@@ -21,6 +21,7 @@ class NavGoalPublisher:
         self.goal = None
         self.stop = False
         self.emergency_goal = None
+        self.has_aborted = False
         self.cf1_pose = None
         self.cf1_vel = None
 
