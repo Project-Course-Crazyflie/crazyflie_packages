@@ -353,11 +353,11 @@ class RRT:
 			normal = np.cross(u,v)
 			normal /= np.linalg.norm(normal)
 
-			#sideways inflation 
+			#sideways inflation
 			normalT = np.cross(normal,np.array([0,0,1]))
 
-			start = start + np.sign(np.dot(normalT,u))* self.inflation*normalT 
-			stop = stop - np.sign(np.dot(normalT,u))*self.inflation*normalT + self.inflation*np.array([0,0,1])
+			start = start + np.sign(np.dot(normalT,u)) * self.inflation * normalT
+			stop = stop - np.sign(np.dot(normalT,u)) * self.inflation * normalT + self.inflation * np.array([0,0,1])
 
 			for i in range(-1,2,2):
 				start1 = start + i*self.inflation*normal
@@ -477,6 +477,11 @@ class RRT:
 				xx = (-normal[1]*yy - normal[2]*zz - d)*1./normal[0]
 
 				fig.plot_surface(xx, yy, zz)
+			elif normal[2] == 0.0:
+				xx, zz = np.meshgrid(np.linspace(start[0], stop[0], 2) , np.linspace(start[2], stop[2], 2))
+				yy = (-normal[0]*xx - normal[2]*zz - d)*1./normal[1]
+
+				fig.plot_surface(xx, yy, zz)
 
 		fig.scatter(self.start_node.x, self.start_node.y, self.start_node.z, "xr")
 		fig.scatter(self.goal_node.x, self.goal_node.y, self.goal_node.z, "xr")
@@ -571,8 +576,8 @@ def generate_and_publish_obstacles():
 		obstacle.scale.x = math.hypot(dx, dy)
 		obstacle.scale.y = 0.1
 		obstacle.scale.z = line[1][2]
-
-		obstacle.color=ColorRGBA(249, 105, 14, 1)
+		#rgba(235, 149, 50, 1)
+		obstacle.color=ColorRGBA(235, 149, 50, 1)
 
 		obstacles_array.markers.append(obstacle)
 

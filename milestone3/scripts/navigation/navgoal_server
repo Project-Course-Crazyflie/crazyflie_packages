@@ -120,7 +120,7 @@ class NavGoalPublisher:
         msg = req.goal
 
         if msg.pose.position.z == 0.0 and msg.header.frame_id in ["cf1/odom", "map"]:
-            msg.pose.position.z = 0.5
+            msg.pose.position.z = rospy.get_param('navigation/2d_height')
 
         goal = msg
         self.goal = goal
