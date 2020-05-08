@@ -1,0 +1,13 @@
+<launch>
+
+    <arg name="record" default="true" />
+
+    <node pkg="milestone3" type="state_machine.py" name="state_machine">
+    </node>
+
+    <node pkg="rosbag" type="record" name="state_machine_rosbag_recorder"
+    args="record -o /temp_cf1_recording -a"
+    if="$(arg record)" /> 
+
+
+</launch>
