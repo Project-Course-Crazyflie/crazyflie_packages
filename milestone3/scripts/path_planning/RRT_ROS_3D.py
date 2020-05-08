@@ -35,7 +35,7 @@ walls = []
 
 
 def path_callback(req):
-	print('path planner got request')
+	#print('path planner got request')
 	start_pos, end_pos = req.start_pos, req.end_pos
 	global walls
 
@@ -116,7 +116,7 @@ class RRT:
 		self.start_node.y_path = [self.start_node.y]
 		self.start_node.z_path = [self.start_node.z]
 		self.inflation = inflation
-		print('start point RRT: ',start_point)
+		#print('start point RRT: ',start_point)
 		if not self.safe(self.start_node, obstacles):
 			raise Exception("Start node is not safe!")
 		self.goal_node = self.RRTnode(goal_point[0], goal_point[1], goal_point[2])
@@ -136,7 +136,6 @@ class RRT:
 		i = 150 #,plot counter
 
 		while is_planning is True:
-			print('i',i)
 
 			random_node = self.generate_random_node()
 
@@ -157,7 +156,6 @@ class RRT:
 				continue
 			if self.calculate_distance_to_goal(self.node_list[-1].x, self.node_list[-1].y, self.node_list[-1].z) <= self.rho:
 				final_node = self.steer(self.node_list[-1], self.goal_node, self.rho)
-				print('neeeeeeeer')
 				if self.safe(final_node, self.obstacles) == True:
 					is_planning = False
 					return self.generate_final_course(len(self.node_list) - 1)
@@ -235,7 +233,7 @@ class RRT:
 			path.append(np.array([node.x, node.y, node.z]))
 			node = node.parent
 		path = list(reversed(path))
-		print('optimizing')
+		#print('optimizing')
 		# makes total sense
 		path = self.pad_path(path)
 		path = self.optimize_path(path)
@@ -283,7 +281,7 @@ class RRT:
 					# change path1
 					path = path[-i:]
 					break
-		print("OMAAAAAGAAAD")
+		#print("OMAAAAAGAAAD")
 		raise Exception("Shouldn't happen mf!")
 
 		#return new_path
@@ -356,7 +354,7 @@ class RRT:
 			#sideways inflation
 			normalT = np.cross(normal,np.array([0,0,1]))
 
-			start = start + np.sign(np.dot(normalT,u)) * self.inflation * normalT
+			start = start + np.sign(np.dot(normalT,u)) * self.inflation * normalT - self.inflation * np.array([0,0,1])
 			stop = stop - np.sign(np.dot(normalT,u)) * self.inflation * normalT + self.inflation * np.array([0,0,1])
 
 			for i in range(-1,2,2):
@@ -554,8 +552,9 @@ def generate_and_publish_obstacles():
 		obstacle = Marker()
 		obstacle.header.stamp = rospy.Time.now()
 
-		dy = line[0][1] - line[1][1]
-		dx = line[0][0] - line[1][0]
+		dy = (line[0][1] - line[1][1])
+		dx = (line[0][0] - line[1][0])
+		dz = (line[0][2] - line[1][2])
 		#dy = line.coords[0][1] - line.coords[1][1]
 		#dx = line.coords[0][0] - line.coords[1][0]
 		wall_yaw = math.atan2(dy, dx)
@@ -574,10 +573,10 @@ def generate_and_publish_obstacles():
 
 		(obstacle.pose.orientation.x, obstacle.pose.orientation.y, obstacle.pose.orientation.z, obstacle.pose.orientation.w) = quaternion_from_euler(0, 0 , wall_yaw)
 		obstacle.scale.x = math.hypot(dx, dy)
-		obstacle.scale.y = 0.1
-		obstacle.scale.z = line[1][2]
+		obstacle.scale.y = 0.01
+		obstacle.scale.z = abs(dz) #math.hypot(dz, dy) #line[1][2]
 		#rgba(235, 149, 50, 1)
-		obstacle.color=ColorRGBA(235, 149, 50, 1)
+		obstacle.color=ColorRGBA(1, 0.5, 0.1, 0.3)
 
 		obstacles_array.markers.append(obstacle)
 

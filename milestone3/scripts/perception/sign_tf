@@ -60,7 +60,7 @@ print(labels)
 fx, fy = rospy.get_param("perception/focal")  #221.88078347, 220.72391163
 
 real_size = world['roadsign_size'][0]
-H, W = rospy.get_param("perception/img_size")[0]  #480,640 or 446, 332 for undist images| use [1]
+H, W = rospy.get_param("perception/img_size")[1]  #480,640 or 446, 332 for undist images| use [1]
 
 
 def main():

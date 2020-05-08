@@ -8,8 +8,10 @@ import tf2_msgs
 import tf2_geometry_msgs
 from tf.transformations import euler_from_quaternion, quaternion_from_euler, quaternion_multiply
 from geometry_msgs.msg import PoseStamped, Quaternion, PoseArray, TransformStamped, Vector3
-from std_msgs.msg import String, Empty, Int8, Bool
+from std_msgs.msg import String, Empty, Int8, Bool, Int32MultiArray
 from crazyflie_driver.msg import Position
+
+from aruco_msgs.msg import Marker, MarkerArray
 
 from milestone3.srv import MoveTo, MoveToRequest
 from milestone3.srv import EmergencyMoveTo, EmergencyMoveToResponse, EmergencyMoveToRequest
@@ -17,6 +19,7 @@ from milestone3.srv import PlanPath, PlanPathResponse
 from milestone3.srv import PlanAndFollowPath, PlanAndFollowPathResponse
 from milestone3.srv import Spin, SpinResponse
 from milestone3.srv import Land, LandResponse
+from milestone3.srv import SearchAruco, SearchArucoResponse
 from milestone3.srv import EmergencyLand, EmergencyLandResponse
 from milestone3.srv import TakeOff, TakeOffResponse
 from milestone3.srv import MoveToMarker, MoveToMarkerResponse
@@ -39,6 +42,26 @@ class NavigationServer:
         rospy.Service("cf1/navigation/land", Land, self.land_callback)
         rospy.Service("cf1/navigation/emergency_land", EmergencyLand, self.emergency_land_callback)
         rospy.Service("cf1/navigation/spin", Spin, self.spin_motion_callback)
+        rospy.Service("cf1/navigation/search", SearchAruco, self.aruco_search_callback)
+
+
+
+        rospy.Subscriber("cf1/localization/converged", Bool, self.convergence_callback)
+        self.convergence_msg = None
+        rospy.Subscriber("aruco/markers", MarkerArray, self.see_marker_callback)
+        self.see_marker = None
+
+        rospy.Subscriber("cf1/localization/measurement_feedback", Int32MultiArray, self.measurement_fb_callback)
+        self.measurement_fb = None
+
+    def measurement_fb_callback(self, msg):
+        self.measurement_fb = msg
+
+    def see_marker_callback(self, markers):
+        self.see_marker = len(markers.markers) > 0
+
+    def convergence_callback(self, msg):
+        self.convergence_msg = msg
 
     def cf1_pose_callback(self, pose):
         self.cf1_pose = pose
@@ -70,7 +93,7 @@ class NavigationServer:
                                                      vel_yaw_thres=vel_yaw_thres,
                                                      duration=float(duration))
 
-            print(resp)
+            #print(resp)
             return resp.at_goal.data
         except rospy.ServiceException as e:
             print("Service call failed: {}".format(e))
@@ -91,13 +114,13 @@ class NavigationServer:
         end_pos = self.get_marker_goal(req.marker_id)
         marker_pos = self.get_marker_pose(req.marker_id)
         rospy.wait_for_service('cf1/navgoal/move_to')
-        print("Planning")
+        #print("Planning")
         resp = self.plath_plan_client(start_pos, end_pos)
         if not len(resp.path.poses):
             print("No path found!")
             return PlanAndFollowPathResponse(Bool(False))
 
-        print("Going")
+        #print("Going")
         poses = list(resp.path.poses)
         for p_curr, p_next in zip(poses, poses[1:]):
             # do something with the orientation
@@ -109,7 +132,7 @@ class NavigationServer:
             #p_next.pose.orientation = end_pos.pose.orientation # remove
              # TODO: currently ignoring if not reached position, change that
             self.navgoal_call(p_next, pos_thres=0.1, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
-        print("End goal")
+        #print("End goal")
         at_goal = self.navgoal_call(end_pos, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
         print("Done")
         return PlanAndFollowPathResponse(Bool(at_goal))
@@ -126,11 +149,11 @@ class NavigationServer:
             goal.header.frame_id = "cf1/base_link"
             goal.pose.position.z = 0.5
             goal.pose.orientation.w = 1 # this keeps the orientation unchanged!
-            resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.1, duration=5)
+            resp = self.navgoal_call(goal, pos_thres=0.2, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.1, duration=10)
             print("Takeoff: {}".format(resp))
             return TakeOffResponse(Bool(resp))
         else:
-            print("FU!")
+            print("FU, I do not wanna flie!")
             return TakeOffResponse(Bool(False))
 
     def land_callback(self, _):
@@ -147,7 +170,7 @@ class NavigationServer:
             print("Landing: {}".format(resp))
             return LandResponse(Bool(resp))
         else:
-            print("Are you serious!?")
+            rospy.logwarn("Do not have pose or is already landed")
             return LandResponse(Bool(False))
 
     def emergency_land_callback(self, _):
@@ -163,10 +186,10 @@ class NavigationServer:
 
             print("Landing: {}".format(resp))
             resp = EmergencyLandResponse(Bool(resp))
-            print(resp)
+            #print(resp)
             return resp
         else:
-            print("Are you serious!?")
+            rospy.logwarn("Emergency: Do not have pose or is already landed")
             return EmergencyLandResponse(Bool(False))
 
     def spin_motion_callback(self, _):
@@ -184,7 +207,7 @@ class NavigationServer:
             return SpinResponse(Bool(False))
 
         # spin 2 thirds
-        print("Spinning...")
+        #print("Spinning...")
         goal = self.cf1_pose
         for i in range(n-1):
             goal.pose.orientation = Quaternion(*quaternion_multiply([goal.pose.orientation.x,
@@ -193,13 +216,57 @@ class NavigationServer:
                                                                     goal.pose.orientation.w],
                                                                     q_inc))
             r = self.navgoal_call(goal, pos_thres=0.1, yaw_thres=0.1, vel_thres=1, vel_yaw_thres=100, duration=1.0)
-            print("Spin {}/{}: {}".format(i+1, n, r))
+            #print("Spin {}/{}: {}".format(i+1, n, r))
         # final goal
         # it might take a long time (over 20 sec) for the drone to reach the final orientation in simulation. Could be that its spinning really fast...
         r = self.navgoal_call(final_pose, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.1, duration=3.0)
-        print("Spin {}/{}: {}".format(n, n, r))
+        #print("Spin {}/{}: {}".format(n, n, r))
         #print("Spin goal: {}".format(final_pose))
         return SpinResponse(Bool(r))
+
+    def aruco_search_callback(self, _):
+        # find closest aruco marker
+        # find the sign of marker's angle (from base)
+        #
+
+        self.convergence_msg = None
+        #self.convergence_msg
+        # Spin the drone and stop to watch the beautiful view(aruco markers)
+        n = 20
+        angle_inc = 2*np.pi/float(n)
+
+        q_inc = quaternion_from_euler(0, 0, angle_inc)
+
+         # in case of crazy drift during spin, we define final pose in
+         # map so that it returns to original pose (shouldnt be necessary irl)
+        try: final_pose = self.tf_buf.transform(self.cf1_pose, 'map',rospy.Duration(1))
+        except:
+            rospy.logerr("Can't transform cf1/pose to map yet...")
+            return SpinResponse(Bool(False))
+
+        #print("Spinning...")
+
+        goal = self.cf1_pose
+        self.see_marker = False
+        rospy.sleep(0.1)
+        for i in range(n):
+            if self.see_marker == True:
+                self.see_marker = False
+                rospy.sleep(0.1)
+                if self.see_marker:
+                    print('I see a marker')
+                    return SearchArucoResponse(Bool(True))
+            #print('spinning ', i)
+            goal.pose.orientation = Quaternion(*quaternion_multiply([goal.pose.orientation.x,
+                                                                    goal.pose.orientation.y,
+                                                                    goal.pose.orientation.z,
+                                                                    goal.pose.orientation.w],
+                                                                    q_inc))
+            r = self.navgoal_call(goal, pos_thres=0.1, yaw_thres=0.1, vel_thres=1, vel_yaw_thres=100, duration=1.0)
+
+
+
+        return SearchArucoResponse(Bool(False))
 
     def marker_goal_callback(self, req):
 

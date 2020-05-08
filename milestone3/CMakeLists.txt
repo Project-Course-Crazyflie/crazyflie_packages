@@ -69,8 +69,9 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
    FollowPath.srv
    Land.srv
    MoveToMarker.srv
-   GetMarkerGoal.srv
+#   GetMarkerGoal.srv
    Spin.srv
+   SearchAruco.srv
    TakeOff.srv
    PlanAndFollowPath.srv
    ResetKalmanFilter.srv
