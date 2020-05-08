@@ -14,6 +14,7 @@ from crazyflie_driver.msg import Position
 from aruco_msgs.msg import Marker, MarkerArray
 
 from milestone3.srv import MoveTo, MoveToRequest
+from milestone3.srv import TurnTowardsMarker, TurnTowardsMarkerResponse
 from milestone3.srv import EmergencyMoveTo, EmergencyMoveToResponse, EmergencyMoveToRequest
 from milestone3.srv import PlanPath, PlanPathResponse
 from milestone3.srv import PlanAndFollowPath, PlanAndFollowPathResponse
@@ -42,6 +43,7 @@ class NavigationServer:
         rospy.Service("cf1/navigation/land", Land, self.land_callback)
         rospy.Service("cf1/navigation/emergency_land", EmergencyLand, self.emergency_land_callback)
         rospy.Service("cf1/navigation/spin", Spin, self.spin_motion_callback)
+        rospy.Service("cf1/navigation/turn_towards_marker", TurnTowardsMarker, self.turn_towards_marker_callback)
         rospy.Service("cf1/navigation/search", SearchAruco, self.aruco_search_callback)
 
 
@@ -123,13 +125,15 @@ class NavigationServer:
         #print("Going")
         poses = list(resp.path.poses)
         for p_curr, p_next in zip(poses, poses[1:]):
-            # do something with the orientation
-            (p_next.pose.orientation.x,
-             p_next.pose.orientation.y,
-             p_next.pose.orientation.z,
-             #p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, p_next)
-             p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, marker_pos)
-            #p_next.pose.orientation = end_pos.pose.orientation # remove
+            # old
+            #(p_next.pose.orientation.x,
+            # p_next.pose.orientation.y,
+            # p_next.pose.orientation.z,
+            # p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, marker_pos)
+
+            # new
+            self.turn_towards_pose(p_curr, marker_pos)
+
              # TODO: currently ignoring if not reached position, change that
             self.navgoal_call(p_next, pos_thres=0.1, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
         #print("End goal")
@@ -191,6 +195,56 @@ class NavigationServer:
         else:
             rospy.logwarn("Emergency: Do not have pose or is already landed")
             return EmergencyLandResponse(Bool(False))
+
+    def turn_towards_marker_callback(self, req):
+        """Mostly for testing turn_towards_pose
+        """
+        start_pos = self.cf1_pose
+        marker_pos = self.get_marker_pose(req.marker_id)
+        self.turn_towards_pose(start_pos, marker_pos)
+        return TurnTowardsMarkerResponse(Bool(True)) # always returns true
+
+
+    def turn_towards_pose(self, p_from, p_towards):
+        """Returns a list of goals with incremental angles to restrict the spinning speed.
+        """
+        
+        q_yaw = self.yaw_towards_pose(p_from, p_towards)
+        _, _, final_yaw = euler_from_quaternion(q_yaw)
+        _, _, curr_yaw = euler_from_quaternion([p_from.orientation.x, p_from.orientation.y,
+                                                p_from.orientation.z, p_from.orientation.w])
+
+        diff = final_yaw - curr_yaw
+        diff = (diff + 180) % 360 - 180
+
+        n = 25
+        yaw_inc = 2*np.pi/float(n)
+
+        ratio = float(diff)/float(yaw_inc)
+
+        yaw_inc *= np.sign(ratio) # might be wrong
+        n_semi_turns = abs(int(ratio))
+        q_inc = quaternion_from_euler(0, 0, yaw_inc)
+        
+        goals = [p_from]
+        while n_semi_turns >= 0:
+            
+            goal = PoseStamped()
+            goal.header = p_from.header
+            goal.pose.position = p_from.pose.position
+            
+            if n_semi_turns == 0:
+                goal.pose.orientation = Quaternion(*q_yaw)
+            else:
+                goal.pose.orientation = Quaternion(*quaternion_multiply([goals[-1].pose.orientation.x,
+                                                                        goals[-1].pose.orientation.y,
+                                                                        goals[-1].pose.orientation.z,
+                                                                        goals[-1].pose.orientation.w],
+                                                                        q_inc))
+            #goals.append(goal)
+            self.navgoal_call(goal, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
+        #return goals
+            
 
     def spin_motion_callback(self, _):
         # Obviously spins the drone XD
