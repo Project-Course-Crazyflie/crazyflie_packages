@@ -211,7 +211,7 @@ def box_publish(boxes):
 	return
 
 rospy.init_node('vision')
-sub_pose = rospy.Subscriber('cf1/camera/image_raw', ImageMsg, callback)
+sub_pose = rospy.Subscriber('cf1/camera/image_undist', ImageMsg, callback)
 image_pub = rospy.Publisher('/boxed_image', ImageMsg, queue_size=1)
 box_pub = rospy.Publisher('/sign_box', Int32MultiArray, queue_size=1)
 

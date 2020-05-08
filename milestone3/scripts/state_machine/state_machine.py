@@ -2,6 +2,7 @@
 
 import math
 import time
+import json
 import numpy as np
 import rospy
 import tf2_ros
@@ -20,6 +21,7 @@ from milestone3.srv import PlanPath, PlanPathRequest
 from milestone3.srv import PlanAndFollowPath, PlanAndFollowPathRequest
 from milestone3.srv import Spin, SpinRequest
 from milestone3.srv import Land, LandRequest
+from milestone3.srv import SearchAruco, SearchArucoRequest
 from milestone3.srv import TakeOff, TakeOffRequest
 from milestone3.srv import MoveToMarker, MoveToMarkerRequest
 from milestone3.srv import MoveTo, MoveToRequest
@@ -43,9 +45,10 @@ class StateMachine:
         self.takeoff_client = rospy.ServiceProxy("cf1/navigation/takeoff", TakeOff)
         self.land_client = rospy.ServiceProxy("cf1/navigation/land", Land)
         self.spin_client = rospy.ServiceProxy("cf1/navigation/spin", Spin)
+        self.search_aruco_client = rospy.ServiceProxy("cf1/navigation/search", SearchAruco)
         self.move_to_marker_client = rospy.ServiceProxy("cf1/navigation/move_to_marker", MoveToMarker)
         self.reset_kalman_client = rospy.ServiceProxy("cf1/localization/reset_kalman_filter", ResetKalmanFilter)
-        self.get_marker_goal_client = rospy.ServiceProxy("cf1/navigation/get_marker_goal", GetMarkerGoal)
+        #self.get_marker_goal_client = rospy.ServiceProxy("cf1/navigation/get_marker_goal", GetMarkerGoal)
         self.move_to_client = rospy.ServiceProxy("cf1/navigation/move_to", MoveTo)
         #self.get_marker_pose_client = rospy.ServiceProxy("cf1/navigation/get_marker_pose", GetMarkerPose)
 
@@ -59,11 +62,24 @@ class StateMachine:
         self.cf1_pose = None
 
         self.checked_markers = []
-        self.unchecked_markers = [5,1] # hardcoding for world hunger
+        self.unchecked_markers = self.load_signs()#[16,17,18] # hardcoding for world hunger
+        self.aruco_markers = self.load_aruco()
         self.current_state = None
         self.abort = False
         self.is_localizing = False
         self.localize_start = None
+
+    def load_signs(self):
+        with open(rospy.get_param(rospy.get_name() + "/world_name"), 'r') as f:
+        	world = json.load(f)
+        signs = [s['sign'] for s in world['roadsigns']]
+        can_see = {'dangerous_curve_left':16, "no_bicycle":17, "warning_roundabout":18}
+        return [can_see[s] for s in signs if s in can_see.keys()]
+
+    def load_aruco(self):
+        with open(rospy.get_param(rospy.get_name() + "/world_name"), 'r') as f:
+        	world = json.load(f)
+        return [m for m in world['markers']]
 
     def measurement_fb_callback(self, msg):
         self.measurement_fb_msg.append(msg)
@@ -77,6 +93,8 @@ class StateMachine:
     def verify_marker(self, marker_id, duration):
         self.measurement_fb_msg = []
         time_start = time.time()
+        counter = 0
+        changes = [0.2, -0.2, 0.2]
         while not rospy.is_shutdown():
             if self.measurement_fb_msg:
                 for m in self.measurement_fb_msg:
@@ -86,7 +104,18 @@ class StateMachine:
                         return True
 
             if (time.time()-time_start) > duration:
-                return False
+                p = PoseStamped()
+                p.header.frame_id = "cf1/base_link"
+                p.header.stamp = rospy.Time.now()
+                p.pose.position.x = changes[counter]
+                p.pose.orientation.w = 1
+                rospy.wait_for_service('cf1/navgoal/move_to')
+                req = MoveToRequest(goal=p, pos_thres=0.05, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
+                self.move_to_client(req)
+                counter += 1
+                #if tried too many times, return false
+                if counter == len(changes) - 1:
+                    return False
 
     def verify_convergence(self, duration):
         self.convergence_msg = None
@@ -102,6 +131,7 @@ class StateMachine:
     def abort_callback(self):
         self.abort = True
 
+    """
     def run_newnew(self):
         state = "init"
         while not rospy.is_shutdown():
@@ -113,22 +143,28 @@ class StateMachine:
                 #rospy.sleep(1) #pause remove
                 state = "localize"
 
-            elif state == "localize":
-                print("Localizing")
-                if not self.is_localizing:
-                    self.is_localizing = True
-                    self.localize_start = time.time()
-                    self.convergence_msg = None
-                else:
-                    if self.convergence_msg:
-                        if self.convergence_msg.data == True:
-                            print("Localization complete!")
-                            state = "go_to_next_marker"
-                    elif time.time() - self.localize_start >= 5:
+            elif state == "search for markers":
+                print("Looking for markers to localize with")
+                if self.search_aruco_client().success.data:
+                    print("Localizing")
+                    if not self.verify_convergence(5):
                         print("Localization failed")
                         state = "abort"
+                        continue
+                    print("Localization complete!")
+                    state = "go to next marker"
+                else:
+                    rospy.logerr('could not find a marker to localize with')
+                    state = "abort"
 
-            elif state == "go_to_next_marker":
+            elif state == "localize":
+                print("Localizing")
+                if not self.verify_convergence(5):
+                    print("Localization failed")
+                    state = "abort"
+                    continue
+
+            elif state == "go to next marker":
                 if not self.unchecked_markers:
                     state = "done"
                     continue
@@ -144,6 +180,7 @@ class StateMachine:
                     continue
                 # not necessary if we don't wanna look at the marker while flying
                 #marker_pos = self.get_marker_pose_client(req.marker_id)
+                print("Going to marker {}".format(marker))
                 resp = self.path_plan_client(start_pos, end_pos)
                 if not len(resp.path.poses):
                     print("No path found!")
@@ -151,7 +188,6 @@ class StateMachine:
                     continue
 
                 rospy.wait_for_service('cf1/navgoal/move_to')
-                print("Going to marker {}".format(marker))
                 poses = list(reversed(resp.path.poses))
                 for p_next in zip(poses):
                     if self.abort:
@@ -165,7 +201,7 @@ class StateMachine:
                     print("End goal")
                     req = MoveToRequest(end_pos, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
                     resp = self.move_to_client(req)
-                    print("At goal:" + str(resp.at_goal.data))
+                    #print("At goal:" + str(resp.at_goal.data))
                     state = "verify_marker"
 
             elif state == "verify_marker":
@@ -199,6 +235,7 @@ class StateMachine:
 
                 print("State machine done!")
                 return
+    """
 
     def run(self):
         state = "init"
@@ -206,24 +243,44 @@ class StateMachine:
             if state == "init":
                 self.reset_kalman_client()
                 print("Taking off")
-                self.takeoff_client()
-                #rospy.sleep(1) #pause remove
-                print("Localizing")
+                if not self.takeoff_client().success.data:
+                    state = "abort"
+                    rospy.logerr("Failed to take off properly")
+                    continue
+                rospy.sleep(1) #pause remove
+                """print("Localizing")
                 if not self.verify_convergence(5):
                     print("Localization failed")
                     state = "abort"
-                    continue
-                print("Localization complete!")
-                state = "go_to_next_marker"
+                    continue"""
+                #print("Localization complete!")
+                state = "search for markers"
 
-            if state == "go_to_next_marker":
+            if state == "search for markers":
+                print("Looking for markers to localize with")
+                if self.search_aruco_client().success.data:
+                    print("Localizing")
+                    if not self.verify_convergence(5):
+                        print("Localization failed")
+                        state = "abort"
+                        continue
+                    print("Localization complete!")
+                    state = "go to next marker"
+                else:
+                    rospy.logerr('could not find a marker to localize with')
+                    state = "abort"
+
+
+            if state == "go to next marker":
                 if not self.unchecked_markers:
                     state = "done"
                     continue
                 marker = self.unchecked_markers.pop(0)
                 # do something with resp
-                print("Planning to marker {}".format(marker))
+                print("Planning and going to marker {}".format(marker))
                 resp = self.plan_and_follow_path_client(marker)
+                if not resp:
+                    rospy.logwarn('this has never failed - joar EDIT: I mean it has failed, just not recently')
                 """
                 while True:
                     try:
@@ -234,7 +291,7 @@ class StateMachine:
                     else:
                         break
                 """
-                print("Going to marker {}".format(marker))
+
                 # do something with resp
                 # verify that marker is detected
                 rospy.sleep(1)
@@ -245,14 +302,21 @@ class StateMachine:
                     print("Failed to find marker")
                     state = "abort"
                     continue
-                #rospy.sleep(1) #pause remove
+
+                state = "spin"
+
+            if state == "spin":
                 print("Spinning")
                 resp = self.spin_client()
                 rospy.sleep(1)
-                print("Wait for convergence after spinning")
-                if not self.verify_convergence(5):
-                    print("Localization failed")
-                    state = "abort"
+                #print("Wait for convergence after spinning")
+                if len(self.unchecked_markers) == 0:
+                    state = "done"
+                else:
+                    state = "search for markers"
+                #if not self.verify_convergence(5):
+                #    print("Localization failed")
+                #    state = "abort"
 
             if state == "abort":
                 print("Aborting")
@@ -280,9 +344,9 @@ class StateMachine:
                     state = "abort"
                     continue
                 print("Localization complete!")
-                state = "go_to_next_marker"
+                state = "go to next marker"
 
-            if state == "go_to_next_marker":
+            if state == "go to next marker":
                 if not self.unchecked_markers:
                     state = "done"
                     continue
@@ -334,5 +398,9 @@ class StateMachine:
 
 if __name__ == '__main__':
     rospy.init_node('state_machine')
-    sm = StateMachine()
-    sm.run()
+
+     # make sure this node starts after everything else
+    while raw_input() != "q": #'\n\ngimme anything. Quit with q\n\n'
+        sm = StateMachine()
+        #print(sm.unchecked_markers)
+        sm.run()

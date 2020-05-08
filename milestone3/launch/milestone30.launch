@@ -6,7 +6,7 @@
 
     <rosparam file="$(find milestone3)/config/milestone3.yaml" />
 
-    <include file="$(find dd2419_simulation)/launch/aruco.launch"/>
+
 
     <node pkg="tf2_ros" type="static_transform_publisher" name="base_to_cam_trans" args="0.01 0 0.02 -1.57 0 -1.57 cf1/base_link cf1/camera_link">
     </node>
@@ -15,18 +15,8 @@
         <param name="initial_map_to_odom" value="$(arg initial_map_to_odom)"/>
     </node>
 
-    <node pkg="milestone3" type="navgoal_server" name="navgoal_publisher"/>
-    <node pkg="milestone3" type="navigation_server.py" name="navigation_server"/>
 
-    <node pkg="milestone3" type="aruco_detection" name="aruco_detection">
-    </node>
     <node pkg="milestone3" type="displaymap.py" name="map_markers">
-        <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
-    </node>
-    <node pkg="milestone3" type="RRT_ROS_3D.py" name="path_planner">
-        <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
-    </node>
-    <node pkg="milestone3" type="state_machine.py" name="state_machine">
         <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
     </node>
 
