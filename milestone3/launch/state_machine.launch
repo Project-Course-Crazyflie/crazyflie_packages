@@ -1,13 +1,15 @@
 <launch>
 
     <arg name="record" default="true" />
+    <arg name="world_name" default="gandalfs_room"/>
 
     <node pkg="milestone3" type="state_machine.py" name="state_machine">
+        <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
     </node>
 
     <node pkg="rosbag" type="record" name="state_machine_rosbag_recorder"
-    args="record -o /temp_cf1_recording -a"
-    if="$(arg record)" /> 
+    args="record -O temp_cf1_recording aruco/result aruco/markers tf tf_static /visualization_marker_array boxed_image /move_base/TrajectoryPlanner /cf1/pose /cf1/localizatiton/pose_cov /cf1/pose/believed /cf1/pose/filtered /cf1/pose/measured_invalid /cf1/pose/measured_valid"
+    if="$(arg record)" />
 
 
 </launch>

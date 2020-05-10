@@ -60,7 +60,7 @@ class NavigationServer:
         self.measurement_fb = msg
 
     def see_marker_callback(self, markers):
-        self.see_marker = len(markers.markers) > 0
+        self.see_marker = (len(markers.markers) > 0) or self.see_marker
 
     def convergence_callback(self, msg):
         self.convergence_msg = msg
@@ -70,7 +70,7 @@ class NavigationServer:
 
     def navgoal_call(self, goal, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.05, duration=0, emergency=False):
     #def navgoal_call(self, goal, pos_thres, yaw_thres, vel_thres, vel_yaw_thres, duration):
-        #rospy.wait_for_service('cf1/navgoal/move_to')
+        rospy.wait_for_service('cf1/navgoal/move_to')
         try:
             #navgoal_client = rospy.ServiceProxy('cf1/move_to_service', MoveTo)
             req = MoveToRequest()
@@ -126,13 +126,13 @@ class NavigationServer:
         poses = list(resp.path.poses)
         for p_curr, p_next in zip(poses, poses[1:]):
             # old
-            #(p_next.pose.orientation.x,
-            # p_next.pose.orientation.y,
-            # p_next.pose.orientation.z,
-            # p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, marker_pos)
+            (p_next.pose.orientation.x,
+             p_next.pose.orientation.y,
+             p_next.pose.orientation.z,
+             p_next.pose.orientation.w) = self.yaw_towards_pose(p_curr, marker_pos)
 
             # new
-            self.turn_towards_pose(p_curr, marker_pos)
+            #self.turn_towards_pose(p_curr, marker_pos)
 
              # TODO: currently ignoring if not reached position, change that
             self.navgoal_call(p_next, pos_thres=0.1, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
@@ -200,19 +200,25 @@ class NavigationServer:
         """Mostly for testing turn_towards_pose
         """
         start_pos = self.cf1_pose
-        marker_pos = self.get_marker_pose(req.marker_id)
-        self.turn_towards_pose(start_pos, marker_pos)
-        return TurnTowardsMarkerResponse(Bool(True)) # always returns true
+        if start_pos:
+            marker_pos = self.get_marker_pose(req.marker_id)
+
+            marker_pos = self.tf_buf.transform(marker_pos, "cf1/odom", rospy.Duration(1.0))
+
+            self.turn_towards_pose(start_pos, marker_pos)
+            return TurnTowardsMarkerResponse(Bool(True)) # always returns true
+        else:
+            return TurnTowardsMarkerResponse(Bool(False))
 
 
     def turn_towards_pose(self, p_from, p_towards):
         """Returns a list of goals with incremental angles to restrict the spinning speed.
         """
-        
+
         q_yaw = self.yaw_towards_pose(p_from, p_towards)
         _, _, final_yaw = euler_from_quaternion(q_yaw)
-        _, _, curr_yaw = euler_from_quaternion([p_from.orientation.x, p_from.orientation.y,
-                                                p_from.orientation.z, p_from.orientation.w])
+        _, _, curr_yaw = euler_from_quaternion([p_from.pose.orientation.x, p_from.pose.orientation.y,
+                                                p_from.pose.orientation.z, p_from.pose.orientation.w])
 
         diff = final_yaw - curr_yaw
         diff = (diff + 180) % 360 - 180
@@ -225,14 +231,14 @@ class NavigationServer:
         yaw_inc *= np.sign(ratio) # might be wrong
         n_semi_turns = abs(int(ratio))
         q_inc = quaternion_from_euler(0, 0, yaw_inc)
-        
+
         goals = [p_from]
         while n_semi_turns >= 0:
-            
+
             goal = PoseStamped()
             goal.header = p_from.header
             goal.pose.position = p_from.pose.position
-            
+
             if n_semi_turns == 0:
                 goal.pose.orientation = Quaternion(*q_yaw)
             else:
@@ -242,9 +248,10 @@ class NavigationServer:
                                                                         goals[-1].pose.orientation.w],
                                                                         q_inc))
             #goals.append(goal)
+
             self.navgoal_call(goal, pos_thres=0.1, yaw_thres=0.2, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
         #return goals
-            
+
 
     def spin_motion_callback(self, _):
         # Obviously spins the drone XD
@@ -255,15 +262,16 @@ class NavigationServer:
 
          # in case of crazy drift during spin, we define final pose in
          # map so that it returns to original pose (shouldnt be necessary irl)
-        try: final_pose = self.tf_buf.transform(self.cf1_pose, 'map',rospy.Duration(1))
-        except:
-            rospy.logerr("Can't transform cf1/pose to map yet...")
-            return SpinResponse(Bool(False))
+
 
         # spin 2 thirds
         #print("Spinning...")
         goal = self.cf1_pose
-        for i in range(n-1):
+        try: goal = self.tf_buf.transform(self.cf1_pose, 'map',rospy.Duration(1))
+        except:
+            rospy.logerr("Can't transform cf1/pose to map yet...")
+            return SpinResponse(Bool(False))
+        for i in range(n):
             goal.pose.orientation = Quaternion(*quaternion_multiply([goal.pose.orientation.x,
                                                                     goal.pose.orientation.y,
                                                                     goal.pose.orientation.z,
@@ -273,7 +281,7 @@ class NavigationServer:
             #print("Spin {}/{}: {}".format(i+1, n, r))
         # final goal
         # it might take a long time (over 20 sec) for the drone to reach the final orientation in simulation. Could be that its spinning really fast...
-        r = self.navgoal_call(final_pose, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.1, duration=3.0)
+        #r = self.navgoal_call(final_pose, pos_thres=0.2, yaw_thres=0.1, vel_thres=0.1, vel_yaw_thres=0.1, duration=3.0)
         #print("Spin {}/{}: {}".format(n, n, r))
         #print("Spin goal: {}".format(final_pose))
         return SpinResponse(Bool(r))
@@ -286,7 +294,7 @@ class NavigationServer:
         self.convergence_msg = None
         #self.convergence_msg
         # Spin the drone and stop to watch the beautiful view(aruco markers)
-        n = 20
+        n = 30
         angle_inc = 2*np.pi/float(n)
 
         q_inc = quaternion_from_euler(0, 0, angle_inc)

@@ -63,7 +63,7 @@ class KalmanFilter:
         """
         innovation = self.innovation(belief, measurement)
         valid = self.maha_dist(innovation, Q) < self.maha_dist_thres
-        #print("MAHA: " + str(self.maha_dist(innovation, Q)))
+        print("MAHA: " + str(self.maha_dist(innovation, Q)))
         K = self.kalman_gain(Q)
         new_belief = self.new_belief(belief, innovation, K)
         return valid, K, new_belief

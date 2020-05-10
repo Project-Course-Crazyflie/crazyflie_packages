@@ -26,11 +26,10 @@
     <node pkg="milestone3" type="RRT_ROS_3D.py" name="path_planner">
         <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
     </node>
-
-    <include file="$(find milestone3)/launch/perception.launch"/>
-
     <!--node pkg="milestone3" type="state_machine.py" name="state_machine">
         <param name="world_name" value="$(find milestone3)/maps/$(arg world_name).world.json"/>
     </node-->
+    <include file="$(find milestone3)/launch/perception.launch"/>
+
 
 </launch>

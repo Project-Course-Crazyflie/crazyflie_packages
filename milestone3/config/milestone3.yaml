@@ -1,5 +1,5 @@
 navigation:
-    dist_to_marker: 0.6
+    dist_to_marker: 0.45
     pos_thres: 0.2      # not used yet
     yaw_thres: 0.1      # not used yet
     vel_thres: 0.1      # not used yet
@@ -19,10 +19,10 @@ localization:
 perception:
     img_size: [[480, 640], [446, 332]]  #H, W
     focal: [221.88078347, 220.72391163]   #Fx, Fy
-    aruco_cov: [0.4, 0.4, 0.4, 0.3, 0.3, 0.3] # used in marker_pose
+    aruco_cov: [0.5, 0.5, 0.5, 0.3, 0.3, 0.3] # used in marker_pose
     sign_cov: [0.1, 0.1, 0.1, -1, -1, -1] # not used in marker_pose
 
 
 path_planning:
-    rho: 0.3
-    inflation: 0.15
+    rho: 0.2
+    inflation: 0.2

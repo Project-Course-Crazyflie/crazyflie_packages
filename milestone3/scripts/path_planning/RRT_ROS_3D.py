@@ -576,7 +576,7 @@ def generate_and_publish_obstacles():
 		obstacle.scale.y = 0.01
 		obstacle.scale.z = abs(dz) #math.hypot(dz, dy) #line[1][2]
 		#rgba(235, 149, 50, 1)
-		obstacle.color=ColorRGBA(1, 0.5, 0.1, 0.3)
+		obstacle.color=ColorRGBA(1, 0.5, 0.1, 0.4)
 
 		obstacles_array.markers.append(obstacle)
 
@@ -598,8 +598,11 @@ rospy.Service('/cf1/path_planning/plan', PlanPath, path_callback)
 rospy.sleep(2)
 
 def main():
-	generate_and_publish_obstacles()
-	rospy.spin()
+	rate = rospy.Rate(1)
+	while not rospy.is_shutdown():
+		generate_and_publish_obstacles()
+		rate.sleep()
+
 
 if __name__ == '__main__':
 	main()

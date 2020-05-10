@@ -94,7 +94,7 @@ class StateMachine:
         self.measurement_fb_msg = []
         time_start = time.time()
         counter = 0
-        changes = [0.2, -0.2, 0.2]
+        changes = [-0.2, 0.2, -0.2]
         while not rospy.is_shutdown():
             if self.measurement_fb_msg:
                 for m in self.measurement_fb_msg:
@@ -111,6 +111,7 @@ class StateMachine:
                 p.pose.orientation.w = 1
                 rospy.wait_for_service('cf1/navgoal/move_to')
                 req = MoveToRequest(goal=p, pos_thres=0.05, yaw_thres=0.3, vel_thres=0.1, vel_yaw_thres=0.05, duration=5)
+                rospy.wait_for_service('cf1/navgoal/move_to')
                 self.move_to_client(req)
                 counter += 1
                 #if tried too many times, return false
@@ -399,8 +400,11 @@ class StateMachine:
 if __name__ == '__main__':
     rospy.init_node('state_machine')
 
-     # make sure this node starts after everything else
-    while raw_input() != "q": #'\n\ngimme anything. Quit with q\n\n'
-        sm = StateMachine()
-        #print(sm.unchecked_markers)
-        sm.run()
+    # make sure this node starts after everything else
+    #while raw_input() != 'q':
+    #    sm = StateMachine()
+    #    #print(sm.unchecked_markers)
+    #    sm.run()
+    rospy.sleep(2)
+    sm = StateMachine()
+    sm.run()
