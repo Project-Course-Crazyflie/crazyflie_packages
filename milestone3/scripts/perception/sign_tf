@@ -10,9 +10,11 @@ import math
 import json
 import tf2_geometry_msgs
 from std_msgs.msg import Int32MultiArray
-from geometry_msgs.msg import TransformStamped, Vector3
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import TransformStamped, Vector3Stamped
+from geometry_msgs.msg import PoseStamped, Quaternion, PoseWithCovariance
 from tf.transformations import quaternion_from_euler,euler_from_quaternion
+from aruco_msgs.msg import Marker, MarkerArray
+
 
 
 boxes_msg = None
@@ -37,6 +39,9 @@ rospy.init_node("sign_tf")
 box_sub = rospy.Subscriber('sign_box', Int32MultiArray, callback_box)
 pose_sub = rospy.Subscriber('cf1/pose', PoseStamped, callback_pose)
 sign_pub = rospy.Publisher('cf1/localization/measurement_feedback', Int32MultiArray, queue_size=1)
+sign_pose_pub = rospy.Publisher('sign_pose', MarkerArray, queue_size=10)
+
+
 br = tf2_ros.TransformBroadcaster()
 tf_buf   = tf2_ros.Buffer()
 tf_lis = tf2_ros.TransformListener(tf_buf, queue_size=10)
@@ -60,6 +65,7 @@ print(labels)
 fx, fy = rospy.get_param("perception/focal")  #221.88078347, 220.72391163
 
 real_size = world['roadsign_size'][0] * 0.7
+
 H, W = rospy.get_param("perception/img_size")[1]  #480,640 or 446, 332 for undist images| use [1]
 
 
@@ -93,10 +99,27 @@ def main():
 				p.pose.position.x = (boxes.data[n*i]-W/2)*Z/fx
 				p.pose.position.y = (boxes.data[n*i+1]-H/2)*Z/fy
 
-				(p.pose.orientation.x,
+				v = Vector3Stamped()
+				v.header.frame_id = "cf1/camera_link"
+				v.header.stamp = rospy.Time.now()
+				v.vector.x = -p.pose.position.x
+				v.vector.y = -p.pose.position.y
+				v.vector.z = -p.pose.position.z
+
+				if not tf_buf.can_transform('map', 'cf1/camera_link', rospy.Time(0)):
+					rospy.logwarn_throttle(5.0, 'No transform from cf1/camera_link to map')
+					return
+
+				v = tf_buf.transform(v,'map',rospy.Duration(0.2))
+
+				yaw_sign_detected_map = math.atan2(v.vector.y, v.vector.x)
+
+
+
+				"""(p.pose.orientation.x,
 				 p.pose.orientation.y,
 				 p.pose.orientation.z,
-				 p.pose.orientation.w) = (0, 0, 0, 1)
+				 p.pose.orientation.w) = (0, 0, 0, 1)"""
 
 				sign_id = boxes.data[n*i+2]
 				print('sign_id: ' + str(sign_id))
@@ -104,20 +127,27 @@ def main():
 				publish_sign_id(sign_id)
 				#rospy.logwarn((boxes.data[n*i+4])*p.pose.position.z/fx)
 				#rospy.logwarn(real_size)
-				"""
+
 				width_world = (boxes.data[n*i+4])*Z/fx
 				rospy.logwarn("width : {}".format(width_world))
 				if Z < width_world/2 :
-					rospy.logwarn("Object to close to get pose, ignoring object")
+					rospy.logwarn("Object too close to get pose, ignoring object")
 					continue
 
-				yaw_detected = math.pi - math.asin((width_world/2)/Z) - math.asin(min(real_size, width_world)/real_size)
+				angle_to_sign = -math.asin((width_world/2)/Z) - math.asin(min(real_size, width_world)/real_size)
+				yaw_detected = yaw_sign_detected_map + angle_to_sign
+				p2 = PoseStamped()
+				p2.pose.orientation = Quaternion(*quaternion_from_euler(0,0,yaw_detected))#-math.pi/2
+				p2.header.frame_id = 'map'
+				p2.header.stamp = rospy.Time.now()
+
+				p.pose.orientation = tf_buf.transform(p2,'cf1/camera_link',rospy.Duration(0.2)).pose.orientation
 				#we might want to cancel the rotation of the drone by doing -euler_from_quaternion([pose_msg.pose.orientation.x,
 				# 																					pose_msg.pose.orientation.y,
 				# 																					pose_msg.pose.orientation.z,
 				# 																					pose_msg.pose.orientation.w])[2]
-
-				rospy.logwarn('yaw detected : {}'.format(yaw_detected))
+				"""
+				rospy.logwarn('yaw detected : {}'.format(angle_to_sign))
 
 				#find orientation:
 				if sign_class in signs: #if it exist in the map
@@ -136,24 +166,22 @@ def main():
 
 					rospy.logwarn('yaw from map : {}'.format(yaw_map))
 
-					if abs(yaw_map-yaw_detected) > yaw_map+yaw_detected : #get the closest yaw to the real one
-						yaw_detected = -yaw_detected
+					if abs(yaw_map-angle_to_sign) > yaw_map+angle_to_sign : #get the closest yaw to the real one
+						angle_to_sign = -angle_to_sign
 
-					rospy.logwarn('yaw detected corrected : {}'.format(yaw_detected))
+					rospy.logwarn('yaw detected corrected : {}'.format(angle_to_sign))
 
-					roll, pitch, yaw = yaw_detected, 0,-3.14/2 #3.14/2, -3.14/2  #weird axis definition..  +90??
+
+					roll, pitch, yaw = angle_to_sign, 0,-3.14/2 #3.14/2, -3.14/2  #weird axis definition..  +90??
+
 					(p.pose.orientation.x,
-    				 p.pose.orientation.y,
-    				 p.pose.orientation.z,
-    				 p.pose.orientation.w) = quaternion_from_euler(roll,
-                                                					 pitch,
-                                                					 yaw)
-
-				if not tf_buf.can_transform('map', 'cf1/camera_link', rospy.Time(0)):
-					rospy.logwarn_throttle(5.0, 'No transform from cf1/camera_link to map')
-					return
+					 p.pose.orientation.y,
+					 p.pose.orientation.z,
+					 p.pose.orientation.w) = quaternion_from_euler(roll,
+																	 pitch,
+																	 yaw)
 				"""
-				#p = tf_buf.transform(p, 'map')
+
 
 				t = TransformStamped()
 				t.header.stamp = rospy.Time.now()#p.header.stamp
@@ -162,6 +190,16 @@ def main():
 				t.transform.translation = p.pose.position
 				t.transform.rotation = p.pose.orientation
 				br.sendTransform(t)
+
+				M = MarkerArray()
+				M.header.stamp = rospy.Time.now()
+				M.header.frame_id = 'cf1/camera_link'
+				m = Marker()
+				m.id = sign_id + 16
+				m.pose = PoseWithCovariance()
+				m.pose.pose = p.pose
+				M.markers.append(m)
+				sign_pose_pub.publish(M)
 
 		rate.sleep()
 	return

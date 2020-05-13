@@ -122,7 +122,7 @@ class KalmanFilter:
 class MapOdomUpdate:
     def __init__(self, init_trans, update_freq):
         rospy.Subscriber('aruco/markers', MarkerArray, self.update_callback)
-        #rospy.Subscriber('sign_pose', MarkerArray, self.update_callback)
+        rospy.Subscriber('sign_pose', MarkerArray, self.update_callback)
         #rospy.Subscriber('marker_measurements', MarkerArray, self.update_callback)
 
         rospy.Subscriber("cf1/pose", PoseStamped, self.cf1_pose_callback)
@@ -303,6 +303,7 @@ class MapOdomUpdate:
         measured_valid_poses.header.frame_id = "map"
         measured_invalid_poses.header.frame_id = "map"
         n_markers = len(m_array.markers)
+        rospy.logwarn(m_array.markers[0].id)
         try:
             believed_trans = self.tf_buf.lookup_transform("map", "cf1/base_link", rospy.Time(0))
         except:
@@ -361,7 +362,10 @@ class MapOdomUpdate:
     def get_measured_pose_filtered(self, believed_pose, marker):
         time_stamp = believed_pose.header.stamp
         frame_detected = "tjululu/detected" + str(marker.id)
-        frame_marker = "aruco/marker" + str(marker.id)
+        if marker.id > 15:
+            frame_marker = "sign/warning_roundabout"
+        else:
+            frame_marker = "aruco/marker" + str(marker.id)
         t = self.transform_from_marker(marker, frame_detected, time_stamp)
         self.tf_buf.set_transform(t, "gandalfs_authority")
         #self.broadcaster.sendTransform(t) # for vizualization
@@ -444,6 +448,7 @@ class MapOdomUpdate:
         try:
             map_to_marker = self.tf_buf.lookup_transform_core(frame_marker, "map", time_stamp)
         except:
+            rospy.logwarn('marker frame does not exist')
             return None
         marker_to_detected = self.tf_buf.lookup_transform_core(frame_marker, frame_detected, time_stamp)
 

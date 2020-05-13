@@ -44,7 +44,7 @@ def main():
 		"""
 		-----------------------------------------------------------------------------
 		"""
-		rate = rospy.Rate(3)
+		rate = rospy.Rate(10)
 		while not rospy.is_shutdown():
 			rate.sleep()
 
